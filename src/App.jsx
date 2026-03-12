@@ -50,6 +50,9 @@ export default function App() {
   const [exportingPdf, setExportingPdf]   = useState(false);
   const [pdfProgress, setPdfProgress]     = useState(0);
 
+  // ── Mobile sidebar toggle ──────────────────────────────────
+  const [sidebarOpen, setSidebarOpen]     = useState(false);
+
   // ── Popup / drawing state ──────────────────────────────────
   const [popupMode, setPopupMode]         = useState(null);
   const [popupPos, setPopupPos]           = useState({ x: 0, y: 0 });
@@ -94,45 +97,56 @@ export default function App() {
     ? annotations.filter((a) => a.chapterId === activeChapter.id)
     : [];
 
-  // ── Document-level mouse events for area drawing ───────────
+  // ── Document-level mouse + touch events for area drawing ───
   useEffect(() => {
     const onMove = (e) => {
       if (!drawingRef.current) return;
-      setDrawing((prev) => prev ? { ...prev, currentX: e.clientX, currentY: e.clientY } : null);
+      const { clientX, clientY } = e.touches ? e.touches[0] : e;
+      setDrawing((prev) => prev ? { ...prev, currentX: clientX, currentY: clientY } : null);
     };
 
-    const onUp = (e) => {
+    const finishDraw = (clientX, clientY) => {
       const d = drawingRef.current;
       if (!d) return;
-      const currentX = e.clientX;
-      const currentY = e.clientY;
       drawingRef.current = null;
       setDrawing(null);
-      if (Math.abs(currentX - d.startX) < 8 || Math.abs(currentY - d.startY) < 8) return;
+      if (Math.abs(clientX - d.startX) < 8 || Math.abs(clientY - d.startY) < 8) return;
 
       const pageEl = drawingPageElRef.current;
       if (!pageEl) return;
       const rect = pageEl.getBoundingClientRect();
 
-      const left   = Math.max(0, ((Math.min(d.startX, currentX) - rect.left) / rect.width)  * 100);
-      const top    = Math.max(0, ((Math.min(d.startY, currentY) - rect.top)  / rect.height) * 100);
-      const width  = Math.min(100 - left, (Math.abs(currentX - d.startX) / rect.width)  * 100);
-      const height = Math.min(100 - top,  (Math.abs(currentY - d.startY) / rect.height) * 100);
+      const left   = Math.max(0, ((Math.min(d.startX, clientX) - rect.left) / rect.width)  * 100);
+      const top    = Math.max(0, ((Math.min(d.startY, clientY) - rect.top)  / rect.height) * 100);
+      const width  = Math.min(100 - left, (Math.abs(clientX - d.startX) / rect.width)  * 100);
+      const height = Math.min(100 - top,  (Math.abs(clientY - d.startY) / rect.height) * 100);
 
       const highlightAreas = [{ pageIndex: d.pageIndex, left, top, width, height }];
       setPendingHighlight({ highlightAreas });
       setPopupMode('form');
-      setPopupPos({
-        x: Math.max(8, Math.min(currentX - 185, window.innerWidth - 390)),
-        y: Math.min(currentY + 10, window.innerHeight - 460),
+
+      const isMobile = window.innerWidth < 768;
+      setPopupPos(isMobile ? {
+        x: 16,
+        y: Math.max(60, (window.innerHeight - 460) / 2),
+      } : {
+        x: Math.max(8, Math.min(clientX - 185, window.innerWidth - 390)),
+        y: Math.min(clientY + 10, window.innerHeight - 460),
       });
     };
 
+    const onUp       = (e) => finishDraw(e.clientX, e.clientY);
+    const onTouchEnd = (e) => finishDraw(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+
     document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    document.addEventListener('mouseup',   onUp);
+    document.addEventListener('touchmove', onMove, { passive: true });
+    document.addEventListener('touchend',  onTouchEnd);
     return () => {
       document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('mouseup',   onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend',  onTouchEnd);
     };
   }, []);
 
@@ -216,7 +230,7 @@ export default function App() {
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
         {/* Drawing overlay */}
         <div
-          style={{ position: 'absolute', inset: 0, zIndex: 1 }}
+          style={{ position: 'absolute', inset: 0, zIndex: 1, touchAction: 'none' }}
           onMouseDown={(e) => {
             if (e.button !== 0 || popupModeRef.current) return;
             drawingPageElRef.current = e.currentTarget;
@@ -224,6 +238,17 @@ export default function App() {
               pageIndex: props.pageIndex,
               startX: e.clientX, startY: e.clientY,
               currentX: e.clientX, currentY: e.clientY,
+            });
+          }}
+          onTouchStart={(e) => {
+            if (popupModeRef.current) return;
+            e.preventDefault(); // prevent scroll while drawing
+            const touch = e.touches[0];
+            drawingPageElRef.current = e.currentTarget;
+            setDrawing({
+              pageIndex: props.pageIndex,
+              startX: touch.clientX, startY: touch.clientY,
+              currentX: touch.clientX, currentY: touch.clientY,
             });
           }}
         />
@@ -352,11 +377,13 @@ export default function App() {
             annotations={chapterAnnotations}
             departments={DEPARTMENTS}
             phases={PHASES}
-            onJumpTo={(a) => jumpToHighlightArea(a.highlightAreas[0])}
+            onJumpTo={(a) => { jumpToHighlightArea(a.highlightAreas[0]); setSidebarOpen(false); }}
             onDelete={deleteAnnotation}
             onExport={() => exportToExcel(chapterAnnotations, activeChapter.title)}
             onExportPdf={handleExportPdf}
             exportingPdf={exportingPdf}
+            isOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
           />
         </div>
       </main>
@@ -380,6 +407,20 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Mobile: sidebar backdrop */}
+      {sidebarOpen && (
+        <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Mobile: FAB to toggle sidebar */}
+      <button
+        className={`sidebar-toggle-fab ${sidebarOpen ? 'is-open' : ''}`}
+        onClick={() => setSidebarOpen((o) => !o)}
+        aria-label="Anotaciones"
+      >
+        {sidebarOpen ? '✕ Cerrar' : `📋 ${chapterAnnotations.length}`}
+      </button>
 
       {/* Annotation form */}
       {popupMode === 'form' && pendingHighlight && (

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 export default function AnnotationSidebar({
   annotations, departments, phases, onJumpTo, onDelete, onExport, onExportPdf, exportingPdf,
+  isOpen, onClose,
 }) {
   const [deptFilter,  setDeptFilter]  = useState('all');
   const [phaseFilter, setPhaseFilter] = useState('all');
@@ -16,7 +17,18 @@ export default function AnnotationSidebar({
   const togglePhase = (id) => setPhaseFilter((prev) => prev === id ? 'all' : id);
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+
+      {/* Mobile drag handle (hidden on desktop via CSS) */}
+      <div className="sidebar-handle" onClick={onClose}>
+        <div className="sidebar-handle-bar" />
+      </div>
+
+      {/* Mobile close row (hidden on desktop via CSS) */}
+      <div className="sidebar-close-row">
+        <span className="sidebar-close-label">Anotaciones</span>
+        <button className="sidebar-close-x" onClick={onClose} aria-label="Cerrar">✕</button>
+      </div>
 
       {/* Filters */}
       <div className="sidebar-filters">
