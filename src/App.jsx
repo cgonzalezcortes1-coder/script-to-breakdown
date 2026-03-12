@@ -44,11 +44,15 @@ export default function App() {
   const [popupPos, setPopupPos]       = useState({ x: 0, y: 0 });
   const [pendingHighlight, setPendingHighlight] = useState(null);
 
-  const [drawing, setDrawing]         = useState(null); // { startX, startY, currentX, currentY }
-  const drawingRef    = useRef(null);
-  const activeDeptRef = useRef(activeDept);
+  const [drawing, setDrawing]         = useState(null);
+  // Refs so document-level handlers always have current values
+  const drawingRef        = useRef(null);
+  const activeDeptRef     = useRef(activeDept);
+  const popupModeRef      = useRef(null);
+  const drawingPageElRef  = useRef(null); // DOM element of the page where draw started
   drawingRef.current    = drawing;
   activeDeptRef.current = activeDept;
+  popupModeRef.current  = popupMode;
 
   // Firebase
   useEffect(() => {
@@ -79,34 +83,23 @@ export default function App() {
 
       const currentX = e.clientX;
       const currentY = e.clientY;
-
       drawingRef.current = null;
       setDrawing(null);
 
       if (Math.abs(currentX - d.startX) < 8 || Math.abs(currentY - d.startY) < 8) return;
 
-      // Find which PDF page contains the drag midpoint
-      const pages = document.querySelectorAll('.rpv-core__page-layer');
-      const midX = (d.startX + currentX) / 2;
-      const midY = (d.startY + currentY) / 2;
-      let foundPage = null;
+      // Use the stored page element ref — its getBoundingClientRect() is always correct
+      // (accounts for current scroll position) and props.pageIndex was the authoritative source.
+      const pageEl = drawingPageElRef.current;
+      if (!pageEl) return;
+      const rect = pageEl.getBoundingClientRect();
 
-      pages.forEach((page, i) => {
-        const rect = page.getBoundingClientRect();
-        if (midX >= rect.left && midX <= rect.right && midY >= rect.top && midY <= rect.bottom) {
-          foundPage = { rect, index: i };
-        }
-      });
-
-      if (!foundPage) return;
-
-      const { rect, index } = foundPage;
       const left   = Math.max(0, ((Math.min(d.startX, currentX) - rect.left) / rect.width)  * 100);
       const top    = Math.max(0, ((Math.min(d.startY, currentY) - rect.top)  / rect.height) * 100);
-      const width  = (Math.abs(currentX - d.startX) / rect.width)  * 100;
-      const height = (Math.abs(currentY - d.startY) / rect.height) * 100;
+      const width  = Math.min(100 - left, (Math.abs(currentX - d.startX) / rect.width)  * 100);
+      const height = Math.min(100 - top,  (Math.abs(currentY - d.startY) / rect.height) * 100);
 
-      const highlightAreas = [{ pageIndex: index, left, top, width, height }];
+      const highlightAreas = [{ pageIndex: d.pageIndex, left, top, width, height }];
       setPendingHighlight({ highlightAreas });
       setPopupMode('form');
       setPopupPos({
@@ -158,10 +151,30 @@ export default function App() {
   const zoomPluginInstance = zoomPlugin();
   const { ZoomIn, ZoomOut, CurrentScale } = zoomPluginInstance;
 
-  // Highlight plugin — rendering saved areas only, no text selection
+  // Highlight plugin:
+  //   - renderHighlights renders saved areas AND a transparent drawing overlay per page.
+  //     The overlay's onMouseDown receives props.pageIndex (always correct) and stores
+  //     the element reference so we can call getBoundingClientRect() at mouseup time.
   const highlightPluginInstance = highlightPlugin({
     renderHighlights: (props) => (
-      <div>
+      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+
+        {/* Transparent drawing overlay — covers the full page */}
+        <div
+          style={{ position: 'absolute', inset: 0, zIndex: 1 }}
+          onMouseDown={(e) => {
+            if (e.button !== 0 || popupModeRef.current) return;
+            // props.pageIndex is the authoritative page index from the plugin
+            drawingPageElRef.current = e.currentTarget;
+            setDrawing({
+              pageIndex: props.pageIndex,
+              startX: e.clientX, startY: e.clientY,
+              currentX: e.clientX, currentY: e.clientY,
+            });
+          }}
+        />
+
+        {/* Saved annotation rectangles */}
         {annotations
           .filter((a) => a.highlightAreas?.some((area) => area.pageIndex === props.pageIndex))
           .flatMap((a) =>
@@ -176,6 +189,8 @@ export default function App() {
                     opacity: 0.5,
                     mixBlendMode: 'multiply',
                     borderRadius: '2px',
+                    zIndex: 2,
+                    pointerEvents: 'none',
                   }}
                   title={`${a.department}${a.phaseLabel ? ' [' + a.phaseLabel + ']' : ''}${a.scene ? ' · Esc ' + a.scene : ''}${a.note ? ': ' + a.note : ''}`}
                 />
@@ -248,13 +263,7 @@ export default function App() {
             </div>
 
             <div className="content-area">
-              <div
-                className="pdf-wrapper drawing-mode"
-                onMouseDown={(e) => {
-                  if (e.button !== 0 || popupMode) return;
-                  setDrawing({ startX: e.clientX, startY: e.clientY, currentX: e.clientX, currentY: e.clientY });
-                }}
-              >
+              <div className="pdf-wrapper drawing-mode">
                 <Worker workerUrl={WORKER_URL}>
                   <Viewer
                     fileUrl={pdfUrl}
@@ -277,7 +286,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Live drawing rectangle */}
+      {/* Live drawing rectangle (fixed position, renders above everything) */}
       {drawing && (
         <div
           style={{
