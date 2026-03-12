@@ -101,21 +101,47 @@ export async function exportAnnotatedPdf(pdfUrl, annotations, chapterTitle, onPr
         });
       }
 
-      // ③ Note text (multi-line) inside rect, below label
-      if (ann.note && rh > lH + 14) {
-        const noteText  = toAscii(ann.note);
-        const nSize     = Math.max(5.5, Math.min(7, rw / 12));
-        const lineH     = nSize + 3.5;
-        const lines     = wrapText(noteText, font, nSize, rw - 8);
+      // ③ Note sticker — white box just BELOW the rectangle (flips above if no room)
+      if (ann.note) {
+        const noteText = toAscii(ann.note);
+        const nSize    = 7;
+        const lineH    = nSize + 3.5;
+        const padX     = 5;
+        const padY     = 4;
+        // Sticker is at least as wide as the rect, with a generous min so text breathes
+        const stickerW = Math.max(rw, Math.min(pw - x, 140));
+        const lines    = wrapText(noteText, font, nSize, stickerW - padX * 2, 4);
+        const stickerH = lines.length * lineH + padY * 2;
+        const gap      = 3; // points between rect bottom edge and sticker top edge
 
+        // PDF Y goes UP from bottom. Rect bottom = y. "Below visually" = lower PDF Y.
+        let stickerY = y - gap - stickerH;
+        // If sticker would fall below the page, flip it ABOVE the rect instead.
+        if (stickerY < 2) stickerY = y + rh + gap;
+
+        // White background + coloured border
+        page.drawRectangle({
+          x, y: stickerY,
+          width: stickerW, height: stickerH,
+          color: rgb(1, 1, 1), opacity: 0.95,
+          borderColor: col, borderWidth: 1.2, borderOpacity: 0.85,
+        });
+
+        // Thin connector line from rect edge to sticker
+        const connX = x + Math.min(rw, stickerW) * 0.12;
+        page.drawLine({
+          start: { x: connX, y: stickerY < y ? y : y + rh },
+          end:   { x: connX, y: stickerY < y ? stickerY + stickerH : stickerY },
+          thickness: 0.8, color: col, opacity: 0.45,
+        });
+
+        // Note lines
         lines.forEach((line, i) => {
-          const lineY = y + rh - lH - (i + 1) * lineH - 1;
-          if (lineY > y + 3) {
-            page.drawText(line, {
-              x: x + 4, y: lineY,
-              size: nSize, font, color: col, opacity: 0.85,
-            });
-          }
+          page.drawText(line, {
+            x: x + padX,
+            y: stickerY + stickerH - padY - (i + 1) * lineH + 2,
+            size: nSize, font, color: col, opacity: 1,
+          });
         });
       }
     }
