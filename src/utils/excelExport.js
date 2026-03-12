@@ -4,6 +4,7 @@ export function exportToExcel(annotations) {
   const data = annotations.map((a) => ({
     Ubicación: `Pág ${a.pageIndex + 1}${a.scene ? `, Esc ${a.scene}` : ''}`,
     Departamento: a.department,
+    Etapa: a.phaseLabel || '',
     'Texto Subrayado': a.text,
     Comentario: a.note || '',
   }));
@@ -14,6 +15,7 @@ export function exportToExcel(annotations) {
   ws['!cols'] = [
     { width: 16 },
     { width: 14 },
+    { width: 10 },
     { width: 50 },
     { width: 35 },
   ];

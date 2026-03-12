@@ -38,7 +38,8 @@ body {
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* ============================================================
@@ -101,6 +102,16 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+/* ============================================================
+   CONTENT AREA (PDF + Sidebar side by side)
+   ============================================================ */
+.content-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
 }
 
 /* ============================================================
@@ -187,7 +198,8 @@ body {
    PDF WRAPPER
    ============================================================ */
 .pdf-wrapper {
-  height: 78vh;
+  flex: 1;
+  min-width: 0;
   overflow: auto;
   background: #525659;
 }
@@ -195,6 +207,193 @@ body {
 /* Override react-pdf-viewer internals for dark bg */
 .pdf-wrapper .rpv-core__viewer {
   background: #525659;
+}
+
+/* ============================================================
+   SIDEBAR
+   ============================================================ */
+.sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.sidebar-filters {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.filter-group-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.filter-chip:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+}
+
+.filter-chip.active {
+  background: var(--filter-color);
+  border-color: var(--filter-color);
+  color: #fff;
+}
+
+.filter-chip.active-all {
+  background: var(--surface3);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.filter-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sidebar-count {
+  padding: 6px 12px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
+.sidebar-item {
+  padding: 9px 11px;
+  background: var(--surface2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 3px solid transparent;
+}
+
+.sidebar-item:hover {
+  background: var(--surface3);
+  transform: translateX(1px);
+}
+
+.sidebar-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.sidebar-item-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.phase-tag {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 20px;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.sidebar-item-location {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.sidebar-item-text {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.sidebar-item-note {
+  font-size: 0.78rem;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.btn-delete-sm {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0 3px;
+  line-height: 1;
+  flex-shrink: 0;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.btn-delete-sm:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.sidebar-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sidebar-export {
+  width: 100%;
+  justify-content: center;
 }
 
 /* ============================================================
@@ -357,6 +556,27 @@ body {
 .dept-chip.active {
   border-color: var(--dept-color);
   background: var(--dept-color);
+  color: #fff;
+}
+
+.phase-chip {
+  padding: 4px 12px;
+  border: 2px solid transparent;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  transition: all 0.15s;
+  letter-spacing: 0.03em;
+}
+
+.phase-chip:hover { background: rgba(255,255,255,0.14); }
+
+.phase-chip.active {
+  border-color: var(--phase-color);
+  background: var(--phase-color);
   color: #fff;
 }
 
