@@ -1096,6 +1096,13 @@ body {
 }
 
 /* ============================================================
+   DRAW MODE BUTTON (mobile only — hidden on desktop)
+   ============================================================ */
+.draw-mode-btn {
+  display: none;
+}
+
+/* ============================================================
    SIDEBAR — MOBILE HANDLE & CLOSE (hidden on desktop)
    ============================================================ */
 .sidebar-handle {
@@ -1149,6 +1156,37 @@ body {
   }
   .viewer-bar::-webkit-scrollbar { display: none; }
   .viewer-hint { display: none; }
+
+  /* Draw mode toggle button */
+  .draw-mode-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    border: 1.5px solid var(--g200);
+    border-radius: 18px;
+    background: var(--white);
+    color: var(--g700);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.18s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .draw-mode-btn.active {
+    background: var(--orange);
+    border-color: var(--orange);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(245, 166, 35, 0.4);
+    animation: pulse-draw 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse-draw {
+    0%, 100% { box-shadow: 0 2px 10px rgba(245, 166, 35, 0.4); }
+    50%       { box-shadow: 0 2px 18px rgba(245, 166, 35, 0.7); }
+  }
 
   /* ── Sidebar → bottom sheet ──────────────────────────────── */
   .sidebar {

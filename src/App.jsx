@@ -53,6 +53,10 @@ export default function App() {
   // ── Mobile sidebar toggle ──────────────────────────────────
   const [sidebarOpen, setSidebarOpen]     = useState(false);
 
+  // ── Mobile draw mode (off by default — touch scrolls the PDF) ─
+  const [mobileDrawMode, setMobileDrawMode] = useState(false);
+  const mobileDrawModeRef                   = useRef(false);
+
   // ── Popup / drawing state ──────────────────────────────────
   const [popupMode, setPopupMode]         = useState(null);
   const [popupPos, setPopupPos]           = useState({ x: 0, y: 0 });
@@ -153,6 +157,9 @@ export default function App() {
   const closePopup = useCallback(() => {
     setPopupMode(null);
     setPendingHighlight(null);
+    // Auto-exit draw mode on mobile when form closes
+    mobileDrawModeRef.current = false;
+    setMobileDrawMode(false);
   }, []);
 
   // ── Chapter CRUD ───────────────────────────────────────────
@@ -230,7 +237,11 @@ export default function App() {
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
         {/* Drawing overlay */}
         <div
-          style={{ position: 'absolute', inset: 0, zIndex: 1, touchAction: 'none' }}
+          style={{
+            position: 'absolute', inset: 0, zIndex: 1,
+            // Only block native scroll when draw mode is active on mobile
+            touchAction: mobileDrawMode ? 'none' : 'auto',
+          }}
           onMouseDown={(e) => {
             if (e.button !== 0 || popupModeRef.current) return;
             drawingPageElRef.current = e.currentTarget;
@@ -241,8 +252,9 @@ export default function App() {
             });
           }}
           onTouchStart={(e) => {
-            if (popupModeRef.current) return;
-            e.preventDefault(); // prevent scroll while drawing
+            // On mobile, only draw when draw mode is explicitly enabled
+            if (popupModeRef.current || !mobileDrawModeRef.current) return;
+            e.preventDefault(); // prevent scroll during drawing gesture
             const touch = e.touches[0];
             drawingPageElRef.current = e.currentTarget;
             setDrawing({
@@ -360,6 +372,18 @@ export default function App() {
           </div>
 
           <span className="viewer-hint">Arrastra para marcar</span>
+
+          {/* Mobile-only: draw mode toggle */}
+          <button
+            className={`draw-mode-btn ${mobileDrawMode ? 'active' : ''}`}
+            onClick={() => {
+              const next = !mobileDrawMode;
+              mobileDrawModeRef.current = next;
+              setMobileDrawMode(next);
+            }}
+          >
+            {mobileDrawMode ? '✏️ Dibujando…' : '✏️ Anotar'}
+          </button>
         </div>
 
         <div className="content-area">
