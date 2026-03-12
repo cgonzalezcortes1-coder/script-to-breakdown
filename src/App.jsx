@@ -3,7 +3,8 @@ import { Worker, Viewer } from '@react-pdf-viewer/core';
 import { highlightPlugin } from '@react-pdf-viewer/highlight';
 import { zoomPlugin } from '@react-pdf-viewer/zoom';
 import {
-  collection, addDoc, deleteDoc, doc, onSnapshot, setDoc, getDoc,
+  collection, addDoc, deleteDoc, doc, onSnapshot,
+  setDoc, getDocs, query, where, writeBatch,
 } from 'firebase/firestore';
 import {
   ref, uploadBytesResumable, getDownloadURL, deleteObject,
@@ -11,7 +12,7 @@ import {
 import { db, storage } from './firebase';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/zoom/lib/styles/index.css';
-import FileUploader from './components/FileUploader';
+import ChapterList from './components/ChapterList';
 import AnnotationForm from './components/AnnotationForm';
 import AnnotationSidebar from './components/AnnotationSidebar';
 import { exportToExcel } from './utils/excelExport';
@@ -33,33 +34,46 @@ export const PHASES = [
 const WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
 
 export default function App() {
-  const [pdfUrl, setPdfUrl]           = useState(null);
-  const [annotations, setAnnotations] = useState([]);
-  const [uploading, setUploading]     = useState(false);
+  // ── Chapter state ──────────────────────────────────────────
+  const [chapters, setChapters]           = useState([]);
+  const [activeChapter, setActiveChapter] = useState(null);
+  const [uploading, setUploading]         = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [loading, setLoading]         = useState(true);
-  const [activeDept, setActiveDept]   = useState(DEPARTMENTS[0]);
+  const [loading, setLoading]             = useState(true);
 
-  const [popupMode, setPopupMode]     = useState(null); // null | 'form'
-  const [popupPos, setPopupPos]       = useState({ x: 0, y: 0 });
+  // ── Annotation state ───────────────────────────────────────
+  const [annotations, setAnnotations]     = useState([]);
+  const [activeDept, setActiveDept]       = useState(DEPARTMENTS[0]);
+
+  // ── Popup / drawing state ──────────────────────────────────
+  const [popupMode, setPopupMode]         = useState(null);
+  const [popupPos, setPopupPos]           = useState({ x: 0, y: 0 });
   const [pendingHighlight, setPendingHighlight] = useState(null);
+  const [drawing, setDrawing]             = useState(null);
 
-  const [drawing, setDrawing]         = useState(null);
-  // Refs so document-level handlers always have current values
-  const drawingRef        = useRef(null);
-  const activeDeptRef     = useRef(activeDept);
-  const popupModeRef      = useRef(null);
-  const drawingPageElRef  = useRef(null); // DOM element of the page where draw started
+  const drawingRef       = useRef(null);
+  const activeDeptRef    = useRef(activeDept);
+  const popupModeRef     = useRef(null);
+  const drawingPageElRef = useRef(null);
   drawingRef.current    = drawing;
   activeDeptRef.current = activeDept;
   popupModeRef.current  = popupMode;
 
-  // Firebase
+  // ── Load chapters ──────────────────────────────────────────
   useEffect(() => {
-    getDoc(doc(db, 'config', 'current'))
-      .then((snap) => { if (snap.exists() && snap.data().pdfUrl) setPdfUrl(snap.data().pdfUrl); })
-      .finally(() => setLoading(false));
+    const unsub = onSnapshot(collection(db, 'chapters'), (snap) => {
+      setChapters(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt)
+      );
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
 
+  // ── Load annotations (all, filtered client-side per chapter) ─
+  useEffect(() => {
     const unsub = onSnapshot(collection(db, 'annotations'), (snap) => {
       setAnnotations(
         snap.docs
@@ -70,7 +84,12 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Document-level mouse events for area drawing
+  // ── Annotations for active chapter ─────────────────────────
+  const chapterAnnotations = activeChapter
+    ? annotations.filter((a) => a.chapterId === activeChapter.id)
+    : [];
+
+  // ── Document-level mouse events for area drawing ───────────
   useEffect(() => {
     const onMove = (e) => {
       if (!drawingRef.current) return;
@@ -80,16 +99,12 @@ export default function App() {
     const onUp = (e) => {
       const d = drawingRef.current;
       if (!d) return;
-
       const currentX = e.clientX;
       const currentY = e.clientY;
       drawingRef.current = null;
       setDrawing(null);
-
       if (Math.abs(currentX - d.startX) < 8 || Math.abs(currentY - d.startY) < 8) return;
 
-      // Use the stored page element ref — its getBoundingClientRect() is always correct
-      // (accounts for current scroll position) and props.pageIndex was the authoritative source.
       const pageEl = drawingPageElRef.current;
       if (!pageEl) return;
       const rect = pageEl.getBoundingClientRect();
@@ -121,50 +136,64 @@ export default function App() {
     setPendingHighlight(null);
   }, []);
 
-  const handleFileUpload = (file) => {
+  // ── Chapter CRUD ───────────────────────────────────────────
+  const handleChapterCreate = (title, file) => {
     setUploading(true);
     setUploadProgress(0);
-    const task = uploadBytesResumable(ref(storage, 'scripts/current.pdf'), file);
+    const chapterRef = doc(collection(db, 'chapters'));
+    const id = chapterRef.id;
+    const task = uploadBytesResumable(ref(storage, `scripts/${id}.pdf`), file);
     task.on(
       'state_changed',
       (s) => setUploadProgress(Math.round((s.bytesTransferred / s.totalBytes) * 100)),
       (err) => { console.error(err); setUploading(false); alert('Error al subir el PDF.'); },
       async () => {
-        const url = await getDownloadURL(task.snapshot.ref);
-        await setDoc(doc(db, 'config', 'current'), { pdfUrl: url });
-        setPdfUrl(url);
+        const pdfUrl = await getDownloadURL(task.snapshot.ref);
+        await setDoc(chapterRef, {
+          title,
+          pdfUrl,
+          order: chapters.length + 1,
+          createdAt: Date.now(),
+        });
         setUploading(false);
+        // Navigate directly to the new chapter
+        setActiveChapter({ id, title, pdfUrl, order: chapters.length + 1, createdAt: Date.now() });
       }
     );
   };
 
-  const handleChangePdf = async () => {
-    try { await deleteObject(ref(storage, 'scripts/current.pdf')); } catch {}
-    await setDoc(doc(db, 'config', 'current'), { pdfUrl: null });
-    setPdfUrl(null);
+  const handleChapterDelete = async (chapter) => {
+    // Delete PDF from storage
+    try { await deleteObject(ref(storage, `scripts/${chapter.id}.pdf`)); } catch {}
+    // Batch-delete all annotations for this chapter
+    const snap = await getDocs(query(collection(db, 'annotations'), where('chapterId', '==', chapter.id)));
+    if (!snap.empty) {
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+    // Delete chapter doc
+    await deleteDoc(doc(db, 'chapters', chapter.id));
   };
 
-  const addAnnotation    = (a)  => addDoc(collection(db, 'annotations'), a);
+  // ── Annotation CRUD ────────────────────────────────────────
+  const addAnnotation = (a) =>
+    addDoc(collection(db, 'annotations'), { ...a, chapterId: activeChapter.id, createdAt: Date.now() });
+
   const deleteAnnotation = (id) => deleteDoc(doc(db, 'annotations', id));
 
-  // Zoom plugin
+  // ── Plugins ────────────────────────────────────────────────
   const zoomPluginInstance = zoomPlugin();
   const { ZoomIn, ZoomOut, CurrentScale } = zoomPluginInstance;
 
-  // Highlight plugin:
-  //   - renderHighlights renders saved areas AND a transparent drawing overlay per page.
-  //     The overlay's onMouseDown receives props.pageIndex (always correct) and stores
-  //     the element reference so we can call getBoundingClientRect() at mouseup time.
   const highlightPluginInstance = highlightPlugin({
     renderHighlights: (props) => (
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-
-        {/* Transparent drawing overlay — covers the full page */}
+        {/* Drawing overlay */}
         <div
           style={{ position: 'absolute', inset: 0, zIndex: 1 }}
           onMouseDown={(e) => {
             if (e.button !== 0 || popupModeRef.current) return;
-            // props.pageIndex is the authoritative page index from the plugin
             drawingPageElRef.current = e.currentTarget;
             setDrawing({
               pageIndex: props.pageIndex,
@@ -173,9 +202,8 @@ export default function App() {
             });
           }}
         />
-
         {/* Saved annotation rectangles */}
-        {annotations
+        {chapterAnnotations
           .filter((a) => a.highlightAreas?.some((area) => area.pageIndex === props.pageIndex))
           .flatMap((a) =>
             a.highlightAreas
@@ -202,17 +230,36 @@ export default function App() {
 
   const { jumpToHighlightArea } = highlightPluginInstance;
 
+  // ── Loading screen ─────────────────────────────────────────
   if (loading) {
     return (
       <div className="app">
         <div className="loading-screen">
           <div className="loading-spinner" />
-          <p>Cargando...</p>
+          <p>Cargando…</p>
         </div>
       </div>
     );
   }
 
+  // ── Chapter list screen ────────────────────────────────────
+  if (!activeChapter) {
+    return (
+      <div className="app">
+        <ChapterList
+          chapters={chapters}
+          annotations={annotations}
+          uploading={uploading}
+          uploadProgress={uploadProgress}
+          onCreate={handleChapterCreate}
+          onSelect={setActiveChapter}
+          onDelete={handleChapterDelete}
+        />
+      </div>
+    );
+  }
+
+  // ── Viewer screen ──────────────────────────────────────────
   return (
     <div className="app">
       <header className="app-header">
@@ -220,73 +267,74 @@ export default function App() {
           <h1 className="app-title"><span>HASAN</span> Script Breakdown</h1>
           <span className="app-sub">Desglose de Sonido · Sound Department</span>
         </div>
+        <div className="app-header-chapter">
+          {activeChapter.title}
+        </div>
       </header>
 
       <main className="app-main">
-        {!pdfUrl ? (
-          <FileUploader onUpload={handleFileUpload} uploading={uploading} progress={uploadProgress} />
-        ) : (
-          <>
-            <div className="viewer-bar">
-              <button className="btn-outline" onClick={handleChangePdf}>
-                ← Cargar otro guión
+        <div className="viewer-bar">
+          <button className="btn-outline" onClick={() => {
+            setActiveChapter(null);
+            setPopupMode(null);
+            setPendingHighlight(null);
+          }}>
+            ← Capítulos
+          </button>
+
+          {/* Department selector */}
+          <div className="dept-toolbar">
+            {DEPARTMENTS.map((dept) => (
+              <button
+                key={dept.id}
+                className={`dept-toolbar-btn ${activeDept.id === dept.id ? 'active' : ''}`}
+                style={{ '--dept-color': dept.color }}
+                onClick={() => setActiveDept(dept)}
+              >
+                {dept.label}
               </button>
+            ))}
+          </div>
 
-              {/* Department selector */}
-              <div className="dept-toolbar">
-                {DEPARTMENTS.map((dept) => (
-                  <button
-                    key={dept.id}
-                    className={`dept-toolbar-btn ${activeDept.id === dept.id ? 'active' : ''}`}
-                    style={{ '--dept-color': dept.color }}
-                    onClick={() => setActiveDept(dept)}
-                  >
-                    {dept.label}
-                  </button>
-                ))}
-              </div>
+          {/* Zoom */}
+          <div className="zoom-controls">
+            <ZoomOut>
+              {(p) => <button className="zoom-btn" onClick={p.onClick} title="Alejar">−</button>}
+            </ZoomOut>
+            <CurrentScale>
+              {(p) => <span className="zoom-level">{Math.round(p.scale * 100)}%</span>}
+            </CurrentScale>
+            <ZoomIn>
+              {(p) => <button className="zoom-btn" onClick={p.onClick} title="Acercar">+</button>}
+            </ZoomIn>
+          </div>
 
-              {/* Zoom controls */}
-              <div className="zoom-controls">
-                <ZoomOut>
-                  {(p) => <button className="zoom-btn" onClick={p.onClick} title="Alejar">−</button>}
-                </ZoomOut>
-                <CurrentScale>
-                  {(p) => <span className="zoom-level">{Math.round(p.scale * 100)}%</span>}
-                </CurrentScale>
-                <ZoomIn>
-                  {(p) => <button className="zoom-btn" onClick={p.onClick} title="Acercar">+</button>}
-                </ZoomIn>
-              </div>
+          <span className="viewer-hint">Arrastra para marcar</span>
+        </div>
 
-              <span className="viewer-hint">Arrastra para marcar</span>
-            </div>
-
-            <div className="content-area">
-              <div className="pdf-wrapper drawing-mode">
-                <Worker workerUrl={WORKER_URL}>
-                  <Viewer
-                    fileUrl={pdfUrl}
-                    plugins={[highlightPluginInstance, zoomPluginInstance]}
-                    defaultScale={1.0}
-                  />
-                </Worker>
-              </div>
-
-              <AnnotationSidebar
-                annotations={annotations}
-                departments={DEPARTMENTS}
-                phases={PHASES}
-                onJumpTo={(a) => jumpToHighlightArea(a.highlightAreas[0])}
-                onDelete={deleteAnnotation}
-                onExport={() => exportToExcel(annotations)}
+        <div className="content-area">
+          <div className="pdf-wrapper drawing-mode">
+            <Worker workerUrl={WORKER_URL}>
+              <Viewer
+                fileUrl={activeChapter.pdfUrl}
+                plugins={[highlightPluginInstance, zoomPluginInstance]}
+                defaultScale={1.0}
               />
-            </div>
-          </>
-        )}
+            </Worker>
+          </div>
+
+          <AnnotationSidebar
+            annotations={chapterAnnotations}
+            departments={DEPARTMENTS}
+            phases={PHASES}
+            onJumpTo={(a) => jumpToHighlightArea(a.highlightAreas[0])}
+            onDelete={deleteAnnotation}
+            onExport={() => exportToExcel(chapterAnnotations, activeChapter.title)}
+          />
+        </div>
       </main>
 
-      {/* Live drawing rectangle (fixed position, renders above everything) */}
+      {/* Live drawing rectangle */}
       {drawing && (
         <div
           style={{
@@ -323,7 +371,7 @@ export default function App() {
               departments={DEPARTMENTS}
               phases={PHASES}
               onSave={(data) => {
-                addAnnotation({ ...data, createdAt: Date.now() });
+                addAnnotation(data);
                 setPopupMode(null);
                 setPendingHighlight(null);
               }}

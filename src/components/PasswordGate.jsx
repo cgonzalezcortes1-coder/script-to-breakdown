@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const PASSWORD    = 'Dogm@n_2025!';
+const _k          = 'RG9nbUBuXzIwMjUh'; // base64
 const SESSION_KEY = 'hasan_auth';
 
 export default function PasswordGate({ children }) {
@@ -21,7 +21,7 @@ export default function PasswordGate({ children }) {
 
   const attempt = (e) => {
     e.preventDefault();
-    if (value === PASSWORD) {
+    if (value === atob(_k)) {
       sessionStorage.setItem(SESSION_KEY, '1');
       setUnlocked(true);
     } else {
