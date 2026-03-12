@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Worker, Viewer } from '@react-pdf-viewer/core';
 import { highlightPlugin } from '@react-pdf-viewer/highlight';
+import { zoomPlugin } from '@react-pdf-viewer/zoom';
 import {
   collection, addDoc, deleteDoc, doc, onSnapshot, setDoc, getDoc,
 } from 'firebase/firestore';
@@ -9,6 +10,7 @@ import {
 } from 'firebase/storage';
 import { db, storage } from './firebase';
 import '@react-pdf-viewer/core/lib/styles/index.css';
+import '@react-pdf-viewer/zoom/lib/styles/index.css';
 import FileUploader from './components/FileUploader';
 import AnnotationForm from './components/AnnotationForm';
 import AnnotationSidebar from './components/AnnotationSidebar';
@@ -30,6 +32,20 @@ export const PHASES = [
 
 const WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
 
+// ─── Trigger components (rendered inside PDF viewer, set state in parent) ───
+
+const DeptPickerTrigger = ({ cancel, toggle, onShow }) => {
+  useEffect(() => { onShow({ cancel, toggle }); }, []);
+  return <div style={{ display: 'none' }} />;
+};
+
+const FormTrigger = ({ cancel, highlightAreas, selectedText, onShow }) => {
+  useEffect(() => { onShow({ cancel, highlightAreas, selectedText }); }, []);
+  return <div style={{ display: 'none' }} />;
+};
+
+// ─── Main App ────────────────────────────────────────────────────────────────
+
 export default function App() {
   const [pdfUrl, setPdfUrl]           = useState(null);
   const [annotations, setAnnotations] = useState([]);
@@ -37,35 +53,74 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading]         = useState(true);
 
-  const selectedDeptRef = useRef(DEPARTMENTS[0]);
+  // Popup state (rendered OUTSIDE the PDF viewer to avoid z-index issues)
+  const [popupMode, setPopupMode]       = useState(null); // null | 'dept' | 'form'
+  const [popupPos, setPopupPos]         = useState({ x: 0, y: 0 });
+  const [pendingHighlight, setPendingHighlight] = useState(null);
 
+  const selectedDeptRef = useRef(DEPARTMENTS[0]);
+  const cancelRef       = useRef(null);
+  const toggleRef       = useRef(null);
+
+  // Callbacks stored in refs so plugin closures stay stable
+  const onDeptTrigger = useRef(null);
+  onDeptTrigger.current = ({ cancel, toggle }) => {
+    cancelRef.current = cancel;
+    toggleRef.current = toggle;
+    setPopupMode('dept');
+  };
+
+  const onFormTrigger = useRef(null);
+  onFormTrigger.current = ({ cancel, highlightAreas, selectedText }) => {
+    cancelRef.current = cancel;
+    setPendingHighlight({ highlightAreas, selectedText });
+    setPopupMode('form');
+  };
+
+  // Capture mouse position when user finishes selecting text
+  const handlePdfMouseUp = useCallback(() => {
+    const sel = window.getSelection();
+    if (sel && sel.toString().trim() && sel.rangeCount > 0) {
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      setPopupPos({
+        x: Math.max(8, Math.min(rect.left + rect.width / 2 - 130, window.innerWidth - 280)),
+        y: rect.bottom + 10,
+      });
+    }
+  }, []);
+
+  const closePopup = useCallback(() => {
+    cancelRef.current?.();
+    setPopupMode(null);
+    setPendingHighlight(null);
+  }, []);
+
+  // Firebase
   useEffect(() => {
     getDoc(doc(db, 'config', 'current'))
-      .then((snap) => {
-        if (snap.exists() && snap.data().pdfUrl) setPdfUrl(snap.data().pdfUrl);
-      })
+      .then((snap) => { if (snap.exists() && snap.data().pdfUrl) setPdfUrl(snap.data().pdfUrl); })
       .finally(() => setLoading(false));
 
-    const unsubscribe = onSnapshot(collection(db, 'annotations'), (snapshot) => {
-      const docs = snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => a.pageIndex - b.pageIndex || a.createdAt - b.createdAt);
-      setAnnotations(docs);
+    const unsub = onSnapshot(collection(db, 'annotations'), (snap) => {
+      setAnnotations(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => a.pageIndex - b.pageIndex || a.createdAt - b.createdAt)
+      );
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
 
   const handleFileUpload = (file) => {
     setUploading(true);
     setUploadProgress(0);
-    const uploadTask = uploadBytesResumable(ref(storage, 'scripts/current.pdf'), file);
-    uploadTask.on(
+    const task = uploadBytesResumable(ref(storage, 'scripts/current.pdf'), file);
+    task.on(
       'state_changed',
-      (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+      (s) => setUploadProgress(Math.round((s.bytesTransferred / s.totalBytes) * 100)),
       (err) => { console.error(err); setUploading(false); alert('Error al subir el PDF.'); },
       async () => {
-        const url = await getDownloadURL(uploadTask.snapshot.ref);
+        const url = await getDownloadURL(task.snapshot.ref);
         await setDoc(doc(db, 'config', 'current'), { pdfUrl: url });
         setPdfUrl(url);
         setUploading(false);
@@ -82,45 +137,27 @@ export default function App() {
   const addAnnotation    = (a)  => addDoc(collection(db, 'annotations'), a);
   const deleteAnnotation = (id) => deleteDoc(doc(db, 'annotations', id));
 
+  // Zoom plugin
+  const zoomPluginInstance = zoomPlugin();
+  const { ZoomIn, ZoomOut, CurrentScale } = zoomPluginInstance;
+
+  // Highlight plugin
   const highlightPluginInstance = highlightPlugin({
     renderHighlightTarget: (props) => (
-      <div
-        className="dept-popup"
-        style={{
-          position: 'absolute',
-          left: `${props.selectionRegion.left}%`,
-          top: `${props.selectionRegion.top + props.selectionRegion.height}%`,
-          transform: 'translate(0, 6px)',
-          zIndex: 10,
-        }}
-      >
-        {DEPARTMENTS.map((dept) => (
-          <button
-            key={dept.id}
-            className="dept-btn"
-            style={{ background: dept.color }}
-            onClick={() => { selectedDeptRef.current = dept; props.toggle(); }}
-          >
-            {dept.label}
-          </button>
-        ))}
-        <button className="dept-cancel-btn" onClick={props.cancel}>✕</button>
-      </div>
-    ),
-
-    renderHighlightContent: (props) => (
-      <AnnotationForm
-        selectedText={props.selectedText}
-        highlightAreas={props.highlightAreas}
-        selectionRegion={props.selectionRegion}
-        dept={selectedDeptRef.current}
-        departments={DEPARTMENTS}
-        phases={PHASES}
-        onSave={(data) => { addAnnotation({ ...data, createdAt: Date.now() }); props.cancel(); }}
-        onCancel={props.cancel}
+      <DeptPickerTrigger
+        cancel={props.cancel}
+        toggle={props.toggle}
+        onShow={(d) => onDeptTrigger.current(d)}
       />
     ),
-
+    renderHighlightContent: (props) => (
+      <FormTrigger
+        cancel={props.cancel}
+        highlightAreas={props.highlightAreas}
+        selectedText={props.selectedText}
+        onShow={(d) => onFormTrigger.current(d)}
+      />
+    ),
     renderHighlights: (props) => (
       <div>
         {annotations
@@ -184,17 +221,35 @@ export default function App() {
               <button className="btn-outline" onClick={handleChangePdf}>
                 ← Cargar otro guión
               </button>
+
+              {/* Zoom controls */}
+              <div className="zoom-controls">
+                <ZoomOut>
+                  {(p) => (
+                    <button className="zoom-btn" onClick={p.onClick} title="Alejar">−</button>
+                  )}
+                </ZoomOut>
+                <CurrentScale>
+                  {(p) => <span className="zoom-level">{Math.round(p.scale * 100)}%</span>}
+                </CurrentScale>
+                <ZoomIn>
+                  {(p) => (
+                    <button className="zoom-btn" onClick={p.onClick} title="Acercar">+</button>
+                  )}
+                </ZoomIn>
+              </div>
+
               <span className="viewer-hint">
-                Selecciona texto → elige departamento → agrega etapa, escena y comentario
+                Selecciona texto → elige departamento
               </span>
             </div>
 
             <div className="content-area">
-              <div className="pdf-wrapper">
+              <div className="pdf-wrapper" onMouseUp={handlePdfMouseUp}>
                 <Worker workerUrl={WORKER_URL}>
                   <Viewer
                     fileUrl={pdfUrl}
-                    plugins={[highlightPluginInstance]}
+                    plugins={[highlightPluginInstance, zoomPluginInstance]}
                     defaultScale={1.0}
                   />
                 </Worker>
@@ -212,6 +267,58 @@ export default function App() {
           </>
         )}
       </main>
+
+      {/* ── Dept picker — rendered OUTSIDE pdf viewer ── */}
+      {popupMode === 'dept' && (
+        <div
+          className="floating-dept-picker"
+          style={{ left: popupPos.x, top: popupPos.y }}
+        >
+          {DEPARTMENTS.map((dept) => (
+            <button
+              key={dept.id}
+              className="dept-btn"
+              style={{ background: dept.color }}
+              onClick={() => {
+                selectedDeptRef.current = dept;
+                toggleRef.current?.();
+              }}
+            >
+              {dept.label}
+            </button>
+          ))}
+          <button className="dept-cancel-btn" onClick={closePopup}>✕</button>
+        </div>
+      )}
+
+      {/* ── Annotation form — rendered OUTSIDE pdf viewer ── */}
+      {popupMode === 'form' && pendingHighlight && (
+        <>
+          <div className="form-backdrop" onClick={closePopup} />
+          <div
+            className="floating-form-wrapper"
+            style={{
+              left: Math.max(8, Math.min(popupPos.x, window.innerWidth - 390)),
+              top: Math.min(popupPos.y, window.innerHeight - 460),
+            }}
+          >
+            <AnnotationForm
+              selectedText={pendingHighlight.selectedText}
+              highlightAreas={pendingHighlight.highlightAreas}
+              dept={selectedDeptRef.current}
+              departments={DEPARTMENTS}
+              phases={PHASES}
+              onSave={(data) => {
+                addAnnotation({ ...data, createdAt: Date.now() });
+                cancelRef.current?.();
+                setPopupMode(null);
+                setPendingHighlight(null);
+              }}
+              onCancel={closePopup}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }

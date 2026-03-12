@@ -397,7 +397,80 @@ body {
 }
 
 /* ============================================================
-   DEPARTMENT POPUP (appears on text select)
+   ZOOM CONTROLS
+   ============================================================ */
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px 4px;
+}
+
+.zoom-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+.zoom-btn:hover { background: rgba(255,255,255,0.1); }
+
+.zoom-level {
+  min-width: 44px;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   FLOATING DEPT PICKER (fixed — outside PDF viewer)
+   ============================================================ */
+.floating-dept-picker {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  flex-wrap: wrap;
+  max-width: 340px;
+  z-index: 99999;
+}
+
+/* ============================================================
+   FLOATING FORM (fixed — outside PDF viewer)
+   ============================================================ */
+.form-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  background: transparent;
+}
+
+.floating-form-wrapper {
+  position: fixed;
+  z-index: 99999;
+}
+
+/* ============================================================
+   DEPARTMENT POPUP (appears on text select) — keep for legacy
    ============================================================ */
 .dept-popup {
   display: flex;
