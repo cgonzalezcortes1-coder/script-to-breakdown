@@ -32,68 +32,23 @@ export const PHASES = [
 
 const WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
 
-// ─── Trigger components (rendered inside PDF viewer, set state in parent) ───
-
-const DeptPickerTrigger = ({ cancel, toggle, onShow }) => {
-  useEffect(() => { onShow({ cancel, toggle }); }, []);
-  return <div style={{ display: 'none' }} />;
-};
-
-const FormTrigger = ({ cancel, highlightAreas, selectedText, onShow }) => {
-  useEffect(() => { onShow({ cancel, highlightAreas, selectedText }); }, []);
-  return <div style={{ display: 'none' }} />;
-};
-
-// ─── Main App ────────────────────────────────────────────────────────────────
-
 export default function App() {
   const [pdfUrl, setPdfUrl]           = useState(null);
   const [annotations, setAnnotations] = useState([]);
   const [uploading, setUploading]     = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading]         = useState(true);
+  const [activeDept, setActiveDept]   = useState(DEPARTMENTS[0]);
 
-  // Popup state (rendered OUTSIDE the PDF viewer to avoid z-index issues)
-  const [popupMode, setPopupMode]       = useState(null); // null | 'dept' | 'form'
-  const [popupPos, setPopupPos]         = useState({ x: 0, y: 0 });
+  const [popupMode, setPopupMode]     = useState(null); // null | 'form'
+  const [popupPos, setPopupPos]       = useState({ x: 0, y: 0 });
   const [pendingHighlight, setPendingHighlight] = useState(null);
 
-  const selectedDeptRef = useRef(DEPARTMENTS[0]);
-  const cancelRef       = useRef(null);
-  const toggleRef       = useRef(null);
-
-  // Callbacks stored in refs so plugin closures stay stable
-  const onDeptTrigger = useRef(null);
-  onDeptTrigger.current = ({ cancel, toggle }) => {
-    cancelRef.current = cancel;
-    toggleRef.current = toggle;
-    setPopupMode('dept');
-  };
-
-  const onFormTrigger = useRef(null);
-  onFormTrigger.current = ({ cancel, highlightAreas, selectedText }) => {
-    cancelRef.current = cancel;
-    setPendingHighlight({ highlightAreas, selectedText });
-    setPopupMode('form');
-  };
-
-  // Capture mouse position when user finishes selecting text
-  const handlePdfMouseUp = useCallback(() => {
-    const sel = window.getSelection();
-    if (sel && sel.toString().trim() && sel.rangeCount > 0) {
-      const rect = sel.getRangeAt(0).getBoundingClientRect();
-      setPopupPos({
-        x: Math.max(8, Math.min(rect.left + rect.width / 2 - 130, window.innerWidth - 280)),
-        y: rect.bottom + 10,
-      });
-    }
-  }, []);
-
-  const closePopup = useCallback(() => {
-    cancelRef.current?.();
-    setPopupMode(null);
-    setPendingHighlight(null);
-  }, []);
+  const [drawing, setDrawing]         = useState(null); // { startX, startY, currentX, currentY }
+  const drawingRef    = useRef(null);
+  const activeDeptRef = useRef(activeDept);
+  drawingRef.current    = drawing;
+  activeDeptRef.current = activeDept;
 
   // Firebase
   useEffect(() => {
@@ -109,6 +64,68 @@ export default function App() {
       );
     });
     return () => unsub();
+  }, []);
+
+  // Document-level mouse events for area drawing
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!drawingRef.current) return;
+      setDrawing((prev) => prev ? { ...prev, currentX: e.clientX, currentY: e.clientY } : null);
+    };
+
+    const onUp = (e) => {
+      const d = drawingRef.current;
+      if (!d) return;
+
+      const currentX = e.clientX;
+      const currentY = e.clientY;
+
+      drawingRef.current = null;
+      setDrawing(null);
+
+      if (Math.abs(currentX - d.startX) < 8 || Math.abs(currentY - d.startY) < 8) return;
+
+      // Find which PDF page contains the drag midpoint
+      const pages = document.querySelectorAll('.rpv-core__page-layer');
+      const midX = (d.startX + currentX) / 2;
+      const midY = (d.startY + currentY) / 2;
+      let foundPage = null;
+
+      pages.forEach((page, i) => {
+        const rect = page.getBoundingClientRect();
+        if (midX >= rect.left && midX <= rect.right && midY >= rect.top && midY <= rect.bottom) {
+          foundPage = { rect, index: i };
+        }
+      });
+
+      if (!foundPage) return;
+
+      const { rect, index } = foundPage;
+      const left   = Math.max(0, ((Math.min(d.startX, currentX) - rect.left) / rect.width)  * 100);
+      const top    = Math.max(0, ((Math.min(d.startY, currentY) - rect.top)  / rect.height) * 100);
+      const width  = (Math.abs(currentX - d.startX) / rect.width)  * 100;
+      const height = (Math.abs(currentY - d.startY) / rect.height) * 100;
+
+      const highlightAreas = [{ pageIndex: index, left, top, width, height }];
+      setPendingHighlight({ highlightAreas });
+      setPopupMode('form');
+      setPopupPos({
+        x: Math.max(8, Math.min(currentX - 185, window.innerWidth - 390)),
+        y: Math.min(currentY + 10, window.innerHeight - 460),
+      });
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  const closePopup = useCallback(() => {
+    setPopupMode(null);
+    setPendingHighlight(null);
   }, []);
 
   const handleFileUpload = (file) => {
@@ -141,23 +158,8 @@ export default function App() {
   const zoomPluginInstance = zoomPlugin();
   const { ZoomIn, ZoomOut, CurrentScale } = zoomPluginInstance;
 
-  // Highlight plugin
+  // Highlight plugin — rendering saved areas only, no text selection
   const highlightPluginInstance = highlightPlugin({
-    renderHighlightTarget: (props) => (
-      <DeptPickerTrigger
-        cancel={props.cancel}
-        toggle={props.toggle}
-        onShow={(d) => onDeptTrigger.current(d)}
-      />
-    ),
-    renderHighlightContent: (props) => (
-      <FormTrigger
-        cancel={props.cancel}
-        highlightAreas={props.highlightAreas}
-        selectedText={props.selectedText}
-        onShow={(d) => onFormTrigger.current(d)}
-      />
-    ),
     renderHighlights: (props) => (
       <div>
         {annotations
@@ -171,11 +173,11 @@ export default function App() {
                   style={{
                     ...props.getCssProperties(area, props.rotation),
                     background: a.color,
-                    opacity: 0.38,
+                    opacity: 0.5,
                     mixBlendMode: 'multiply',
                     borderRadius: '2px',
                   }}
-                  title={`${a.department} [${a.phaseLabel || ''}]${a.scene ? ' · Esc ' + a.scene : ''}: ${a.note || a.text}`}
+                  title={`${a.department}${a.phaseLabel ? ' [' + a.phaseLabel + ']' : ''}${a.scene ? ' · Esc ' + a.scene : ''}${a.note ? ': ' + a.note : ''}`}
                 />
               ))
           )}
@@ -203,13 +205,6 @@ export default function App() {
           <h1 className="app-title">Desglose de Sonido</h1>
           <span className="app-sub">Script Breakdown Tool</span>
         </div>
-        <div className="dept-legend">
-          {DEPARTMENTS.map((d) => (
-            <span key={d.id} className="legend-badge" style={{ background: d.color }}>
-              {d.label}
-            </span>
-          ))}
-        </div>
       </header>
 
       <main className="app-main">
@@ -222,30 +217,44 @@ export default function App() {
                 ← Cargar otro guión
               </button>
 
+              {/* Department selector */}
+              <div className="dept-toolbar">
+                {DEPARTMENTS.map((dept) => (
+                  <button
+                    key={dept.id}
+                    className={`dept-toolbar-btn ${activeDept.id === dept.id ? 'active' : ''}`}
+                    style={{ '--dept-color': dept.color }}
+                    onClick={() => setActiveDept(dept)}
+                  >
+                    {dept.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Zoom controls */}
               <div className="zoom-controls">
                 <ZoomOut>
-                  {(p) => (
-                    <button className="zoom-btn" onClick={p.onClick} title="Alejar">−</button>
-                  )}
+                  {(p) => <button className="zoom-btn" onClick={p.onClick} title="Alejar">−</button>}
                 </ZoomOut>
                 <CurrentScale>
                   {(p) => <span className="zoom-level">{Math.round(p.scale * 100)}%</span>}
                 </CurrentScale>
                 <ZoomIn>
-                  {(p) => (
-                    <button className="zoom-btn" onClick={p.onClick} title="Acercar">+</button>
-                  )}
+                  {(p) => <button className="zoom-btn" onClick={p.onClick} title="Acercar">+</button>}
                 </ZoomIn>
               </div>
 
-              <span className="viewer-hint">
-                Selecciona texto → elige departamento
-              </span>
+              <span className="viewer-hint">Arrastra para marcar</span>
             </div>
 
             <div className="content-area">
-              <div className="pdf-wrapper" onMouseUp={handlePdfMouseUp}>
+              <div
+                className="pdf-wrapper drawing-mode"
+                onMouseDown={(e) => {
+                  if (e.button !== 0 || popupMode) return;
+                  setDrawing({ startX: e.clientX, startY: e.clientY, currentX: e.clientX, currentY: e.clientY });
+                }}
+              >
                 <Worker workerUrl={WORKER_URL}>
                   <Viewer
                     fileUrl={pdfUrl}
@@ -268,30 +277,27 @@ export default function App() {
         )}
       </main>
 
-      {/* ── Dept picker — rendered OUTSIDE pdf viewer ── */}
-      {popupMode === 'dept' && (
+      {/* Live drawing rectangle */}
+      {drawing && (
         <div
-          className="floating-dept-picker"
-          style={{ left: popupPos.x, top: popupPos.y }}
-        >
-          {DEPARTMENTS.map((dept) => (
-            <button
-              key={dept.id}
-              className="dept-btn"
-              style={{ background: dept.color }}
-              onClick={() => {
-                selectedDeptRef.current = dept;
-                toggleRef.current?.();
-              }}
-            >
-              {dept.label}
-            </button>
-          ))}
-          <button className="dept-cancel-btn" onClick={closePopup}>✕</button>
-        </div>
+          style={{
+            position: 'fixed',
+            left:   Math.min(drawing.startX, drawing.currentX),
+            top:    Math.min(drawing.startY, drawing.currentY),
+            width:  Math.abs(drawing.currentX - drawing.startX),
+            height: Math.abs(drawing.currentY - drawing.startY),
+            background: activeDept.color,
+            opacity: 0.45,
+            pointerEvents: 'none',
+            zIndex: 99997,
+            borderRadius: 2,
+            border: `2px solid ${activeDept.color}`,
+            boxSizing: 'border-box',
+          }}
+        />
       )}
 
-      {/* ── Annotation form — rendered OUTSIDE pdf viewer ── */}
+      {/* Annotation form */}
       {popupMode === 'form' && pendingHighlight && (
         <>
           <div className="form-backdrop" onClick={closePopup} />
@@ -299,18 +305,16 @@ export default function App() {
             className="floating-form-wrapper"
             style={{
               left: Math.max(8, Math.min(popupPos.x, window.innerWidth - 390)),
-              top: Math.min(popupPos.y, window.innerHeight - 460),
+              top:  Math.min(popupPos.y, window.innerHeight - 460),
             }}
           >
             <AnnotationForm
-              selectedText={pendingHighlight.selectedText}
               highlightAreas={pendingHighlight.highlightAreas}
-              dept={selectedDeptRef.current}
+              dept={activeDeptRef.current}
               departments={DEPARTMENTS}
               phases={PHASES}
               onSave={(data) => {
                 addAnnotation({ ...data, createdAt: Date.now() });
-                cancelRef.current?.();
                 setPopupMode(null);
                 setPendingHighlight(null);
               }}

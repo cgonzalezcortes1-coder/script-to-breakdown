@@ -1,11 +1,5 @@
 import React, { useState } from 'react';
 
-const truncateWords = (text, limit = 9) => {
-  const words = text.trim().split(/\s+/);
-  if (words.length <= limit) return text;
-  return words.slice(0, limit).join(' ') + '…';
-};
-
 export default function AnnotationSidebar({
   annotations, departments, phases, onJumpTo, onDelete, onExport,
 }) {
@@ -114,8 +108,6 @@ export default function AnnotationSidebar({
               <div className="sidebar-item-location">
                 Pág {a.pageIndex + 1}{a.scene ? ` · Esc ${a.scene}` : ''}
               </div>
-
-              <div className="sidebar-item-text">"{truncateWords(a.text)}"</div>
 
               {a.note && (
                 <div className="sidebar-item-note">{a.note}</div>

@@ -209,6 +209,44 @@ body {
   background: #525659;
 }
 
+.pdf-wrapper.drawing-mode {
+  user-select: none;
+  cursor: crosshair;
+}
+
+/* ============================================================
+   DEPT TOOLBAR (in viewer bar)
+   ============================================================ */
+.dept-toolbar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dept-toolbar-btn {
+  padding: 5px 12px;
+  border: 2px solid transparent;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(255,255,255,0.08);
+  color: var(--text-muted);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.dept-toolbar-btn:hover {
+  background: rgba(255,255,255,0.14);
+  color: var(--text);
+}
+
+.dept-toolbar-btn.active {
+  border-color: var(--dept-color);
+  background: var(--dept-color);
+  color: #fff;
+}
+
 /* ============================================================
    SIDEBAR
    ============================================================ */

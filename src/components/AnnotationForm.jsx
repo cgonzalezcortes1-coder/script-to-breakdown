@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 export default function AnnotationForm({
-  selectedText, highlightAreas,
+  highlightAreas,
   dept, departments, phases, onSave, onCancel,
 }) {
   const [scene, setScene]               = useState('');
@@ -19,7 +19,6 @@ export default function AnnotationForm({
     onSave({
       pageIndex,
       highlightAreas,
-      text: selectedText,
       department:   selectedDept.label,
       departmentId: selectedDept.id,
       color:        selectedDept.color,
@@ -31,16 +30,12 @@ export default function AnnotationForm({
     });
   };
 
-  const preview = selectedText.length > 100 ? selectedText.slice(0, 100) + '…' : selectedText;
-
   return (
     <div className="annotation-form">
       <div className="form-header" style={{ borderTop: `4px solid ${selectedDept.color}` }}>
         <span className="form-title">Nueva Anotación · Pág {pageIndex + 1}</span>
         <button className="form-close-btn" type="button" onClick={onCancel}>✕</button>
       </div>
-
-      <div className="form-preview">"{preview}"</div>
 
       <form onSubmit={handleSubmit} className="form-body">
         <div className="form-field">

@@ -5,7 +5,6 @@ export function exportToExcel(annotations) {
     Ubicación: `Pág ${a.pageIndex + 1}${a.scene ? `, Esc ${a.scene}` : ''}`,
     Departamento: a.department,
     Etapa: a.phaseLabel || '',
-    'Texto Subrayado': a.text,
     Comentario: a.note || '',
   }));
 
@@ -16,8 +15,7 @@ export function exportToExcel(annotations) {
     { width: 16 },
     { width: 14 },
     { width: 10 },
-    { width: 50 },
-    { width: 35 },
+    { width: 40 },
   ];
 
   const wb = XLSX.utils.book_new();
