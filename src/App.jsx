@@ -217,8 +217,8 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="app-header-left">
-          <h1 className="app-title">Desglose de Sonido</h1>
-          <span className="app-sub">Script Breakdown Tool</span>
+          <h1 className="app-title"><span>HASAN</span> Script Breakdown</h1>
+          <span className="app-sub">Desglose de Sonido · Sound Department</span>
         </div>
       </header>
 
