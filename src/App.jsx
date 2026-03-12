@@ -16,6 +16,7 @@ import ChapterList from './components/ChapterList';
 import AnnotationForm from './components/AnnotationForm';
 import AnnotationSidebar from './components/AnnotationSidebar';
 import { exportToExcel } from './utils/excelExport';
+import { exportAnnotatedPdf } from './utils/pdfAnnotate';
 import './App.css';
 
 export const DEPARTMENTS = [
@@ -44,6 +45,10 @@ export default function App() {
   // ── Annotation state ───────────────────────────────────────
   const [annotations, setAnnotations]     = useState([]);
   const [activeDept, setActiveDept]       = useState(DEPARTMENTS[0]);
+
+  // ── PDF export state ───────────────────────────────────────
+  const [exportingPdf, setExportingPdf]   = useState(false);
+  const [pdfProgress, setPdfProgress]     = useState(0);
 
   // ── Popup / drawing state ──────────────────────────────────
   const [popupMode, setPopupMode]         = useState(null);
@@ -181,6 +186,26 @@ export default function App() {
     addDoc(collection(db, 'annotations'), { ...a, chapterId: activeChapter.id, createdAt: Date.now() });
 
   const deleteAnnotation = (id) => deleteDoc(doc(db, 'annotations', id));
+
+  const handleExportPdf = async () => {
+    if (!activeChapter || exportingPdf) return;
+    setExportingPdf(true);
+    setPdfProgress(0);
+    try {
+      await exportAnnotatedPdf(
+        activeChapter.pdfUrl,
+        chapterAnnotations,
+        activeChapter.title,
+        setPdfProgress,
+      );
+    } catch (err) {
+      console.error('PDF export error:', err);
+      alert('Error al generar el PDF. Intenta de nuevo.');
+    } finally {
+      setExportingPdf(false);
+      setPdfProgress(0);
+    }
+  };
 
   // ── Plugins ────────────────────────────────────────────────
   const zoomPluginInstance = zoomPlugin();
@@ -330,6 +355,8 @@ export default function App() {
             onJumpTo={(a) => jumpToHighlightArea(a.highlightAreas[0])}
             onDelete={deleteAnnotation}
             onExport={() => exportToExcel(chapterAnnotations, activeChapter.title)}
+            onExportPdf={handleExportPdf}
+            exportingPdf={exportingPdf}
           />
         </div>
       </main>

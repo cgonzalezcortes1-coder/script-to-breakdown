@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 export default function AnnotationSidebar({
-  annotations, departments, phases, onJumpTo, onDelete, onExport,
+  annotations, departments, phases, onJumpTo, onDelete, onExport, onExportPdf, exportingPdf,
 }) {
   const [deptFilter,  setDeptFilter]  = useState('all');
   const [phaseFilter, setPhaseFilter] = useState('all');
@@ -120,7 +120,15 @@ export default function AnnotationSidebar({
       {/* Footer */}
       <div className="sidebar-footer">
         <button className="btn-export sidebar-export" onClick={onExport}>
-          ⬇ Exportar a Excel
+          ⬇ Excel
+        </button>
+        <button
+          className="btn-export sidebar-export btn-export-pdf"
+          onClick={onExportPdf}
+          disabled={exportingPdf}
+          title="Descarga el PDF con los rectángulos y notas dibujados"
+        >
+          {exportingPdf ? '⏳ Generando…' : '⬇ PDF con notas'}
         </button>
       </div>
     </aside>
