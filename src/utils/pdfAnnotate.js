@@ -20,19 +20,31 @@ const hexToRgb = (hex) => rgb(
 );
 
 /**
- * Simple greedy word-wrapper.
+ * Greedy word-wrapper with hard truncation for words that exceed maxWidth.
  * Returns up to maxLines lines that fit within maxWidth PDF points.
  */
 const wrapText = (text, font, size, maxWidth, maxLines = 3) => {
+  // Truncate a single word that is wider than maxWidth, adding '...' suffix.
+  const truncateWord = (word) => {
+    if (font.widthOfTextAtSize(word, size) <= maxWidth) return word;
+    let safe = '';
+    for (const ch of word) {
+      if (font.widthOfTextAtSize(safe + ch + '...', size) > maxWidth) break;
+      safe += ch;
+    }
+    return safe + '...';
+  };
+
   const words = text.split(/\s+/);
   const lines = [];
   let current = '';
   for (const word of words) {
-    const test = current ? `${current} ${word}` : word;
+    const safeWord = truncateWord(word);
+    const test = current ? `${current} ${safeWord}` : safeWord;
     if (font.widthOfTextAtSize(test, size) > maxWidth && current) {
       lines.push(current);
       if (lines.length >= maxLines) return lines;
-      current = word;
+      current = safeWord;
     } else {
       current = test;
     }
@@ -101,44 +113,90 @@ export async function exportAnnotatedPdf(pdfUrl, annotations, chapterTitle, onPr
         });
       }
 
-      // ③ Note sticker — white box just BELOW the rectangle (flips above if no room)
+      // ③ Note sticker — right margin → left margin → below rect (fallback)
       if (ann.note) {
         const noteText = toAscii(ann.note);
         const nSize    = 7;
         const lineH    = nSize + 3.5;
         const padX     = 5;
         const padY     = 4;
-        // Sticker is at least as wide as the rect, with a generous min so text breathes
-        const stickerW = Math.max(rw, Math.min(pw - x, 140));
-        const lines    = wrapText(noteText, font, nSize, stickerW - padX * 2, 4);
+        const gap      = 5;   // space between rect edge and sticker
+        const minW     = 55;  // minimum useful sticker width (points)
+
+        // How much blank space is available in each margin?
+        const rightAvail = pw - (x + rw) - gap - 4;
+        const leftAvail  = x - gap - 4;
+
+        // Pick placement: right → left → below
+        let stickerX, stickerW, placeBelow = false, placeLeft = false;
+
+        if (rightAvail >= minW) {
+          // Right margin — never exceed page right edge
+          stickerW = Math.min(rightAvail, 130, pw - (x + rw + gap) - 4);
+          stickerX = x + rw + gap;
+        } else if (leftAvail >= minW) {
+          // Left margin — never go below x = 4
+          stickerW = Math.min(leftAvail, 130, x - gap - 4);
+          stickerX = x - gap - stickerW;
+          placeLeft = true;
+        } else {
+          // No usable margin — fall back to below (or above) the rect
+          // Width: at least as wide as the rect but never past the page right edge
+          stickerW = Math.min(Math.max(rw, 140), pw - x - 4);
+          stickerX = x;
+          placeBelow = true;
+        }
+
+        // Ensure stickerW is at least 1 to avoid division issues
+        stickerW = Math.max(stickerW, 20);
+
+        const lines    = wrapText(noteText, font, nSize, stickerW - padX * 2, 5);
         const stickerH = lines.length * lineH + padY * 2;
-        const gap      = 3; // points between rect bottom edge and sticker top edge
 
-        // PDF Y goes UP from bottom. Rect bottom = y. "Below visually" = lower PDF Y.
-        let stickerY = y - gap - stickerH;
-        // If sticker would fall below the page, flip it ABOVE the rect instead.
-        if (stickerY < 2) stickerY = y + rh + gap;
+        // ── Vertical position ──────────────────────────────────
+        let stickerY;
+        if (placeBelow) {
+          // Prefer below the rect visually; flip above if not enough room
+          stickerY = y - gap - stickerH;
+          if (stickerY < 4) stickerY = y + rh + gap;
+        } else {
+          // Align sticker top with rect top
+          stickerY = y + rh - stickerH;
+        }
+        // Final clamp: never outside the page regardless of placement
+        stickerY = Math.max(4, Math.min(ph - stickerH - 4, stickerY));
 
-        // White background + coloured border
+        // ── White sticker box ──────────────────────────────────
         page.drawRectangle({
-          x, y: stickerY,
+          x: stickerX, y: stickerY,
           width: stickerW, height: stickerH,
           color: rgb(1, 1, 1), opacity: 0.95,
           borderColor: col, borderWidth: 1.2, borderOpacity: 0.85,
         });
 
-        // Thin connector line from rect edge to sticker
-        const connX = x + Math.min(rw, stickerW) * 0.12;
-        page.drawLine({
-          start: { x: connX, y: stickerY < y ? y : y + rh },
-          end:   { x: connX, y: stickerY < y ? stickerY + stickerH : stickerY },
-          thickness: 0.8, color: col, opacity: 0.45,
-        });
+        // ── Connector line ─────────────────────────────────────
+        if (placeBelow) {
+          // Short vertical line from rect edge to sticker
+          const cx = x + rw * 0.12;
+          page.drawLine({
+            start: { x: cx, y: stickerY < y ? y : y + rh },
+            end:   { x: cx, y: stickerY < y ? stickerY + stickerH : stickerY },
+            thickness: 0.8, color: col, opacity: 0.4,
+          });
+        } else {
+          // Horizontal line from rect mid-height to sticker edge
+          const cy = y + rh / 2;
+          page.drawLine({
+            start: { x: placeLeft ? x : x + rw,              y: cy },
+            end:   { x: placeLeft ? stickerX + stickerW : stickerX, y: cy },
+            thickness: 0.8, color: col, opacity: 0.4,
+          });
+        }
 
-        // Note lines
+        // ── Note text lines ────────────────────────────────────
         lines.forEach((line, i) => {
           page.drawText(line, {
-            x: x + padX,
+            x: stickerX + padX,
             y: stickerY + stickerH - padY - (i + 1) * lineH + 2,
             size: nSize, font, color: col, opacity: 1,
           });
