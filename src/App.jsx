@@ -3,7 +3,7 @@ import { Worker, Viewer } from '@react-pdf-viewer/core';
 import { highlightPlugin } from '@react-pdf-viewer/highlight';
 import { zoomPlugin } from '@react-pdf-viewer/zoom';
 import {
-  collection, addDoc, deleteDoc, doc, onSnapshot,
+  collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot,
   setDoc, getDocs, query, where, writeBatch,
 } from 'firebase/firestore';
 import {
@@ -46,9 +46,16 @@ export default function App() {
   const [annotations, setAnnotations]     = useState([]);
   const [activeDept, setActiveDept]       = useState(DEPARTMENTS[0]);
 
+  // ── Sidebar filters (lifted here so PDF viewer reacts too) ─
+  const [deptFilter,  setDeptFilter]  = useState('all');
+  const [phaseFilter, setPhaseFilter] = useState('all');
+
   // ── PDF export state ───────────────────────────────────────
   const [exportingPdf, setExportingPdf]   = useState(false);
   const [pdfProgress, setPdfProgress]     = useState(0);
+
+  // ── Editing ────────────────────────────────────────────────
+  const [editingAnnotation, setEditingAnnotation] = useState(null);
 
   // ── Mobile sidebar toggle ──────────────────────────────────
   const [sidebarOpen, setSidebarOpen]     = useState(false);
@@ -100,6 +107,19 @@ export default function App() {
   const chapterAnnotations = activeChapter
     ? annotations.filter((a) => a.chapterId === activeChapter.id)
     : [];
+
+  // Reset filters whenever the user opens a different chapter
+  useEffect(() => {
+    setDeptFilter('all');
+    setPhaseFilter('all');
+  }, [activeChapter?.id]);
+
+  // Filtered subset shared by both the sidebar list and the PDF highlights
+  const filteredAnnotations = chapterAnnotations.filter((a) => {
+    if (deptFilter  !== 'all' && a.departmentId !== deptFilter)  return false;
+    if (phaseFilter !== 'all' && a.phase        !== phaseFilter) return false;
+    return true;
+  });
 
   // ── Document-level mouse + touch events for area drawing ───
   useEffect(() => {
@@ -208,6 +228,18 @@ export default function App() {
 
   const deleteAnnotation = (id) => deleteDoc(doc(db, 'annotations', id));
 
+  const updateAnnotation = (id, data) =>
+    updateDoc(doc(db, 'annotations', id), {
+      department:   data.department,
+      departmentId: data.departmentId,
+      color:        data.color,
+      phase:        data.phase,
+      phaseLabel:   data.phaseLabel,
+      phaseColor:   data.phaseColor,
+      scene:        data.scene,
+      note:         data.note,
+    });
+
   const handleExportPdf = async () => {
     if (!activeChapter || exportingPdf) return;
     setExportingPdf(true);
@@ -215,7 +247,7 @@ export default function App() {
     try {
       await exportAnnotatedPdf(
         activeChapter.pdfUrl,
-        chapterAnnotations,
+        filteredAnnotations,
         activeChapter.title,
         setPdfProgress,
       );
@@ -264,8 +296,8 @@ export default function App() {
             });
           }}
         />
-        {/* Saved annotation rectangles */}
-        {chapterAnnotations
+        {/* Saved annotation rectangles — only filtered ones */}
+        {filteredAnnotations
           .filter((a) => a.highlightAreas?.some((area) => area.pageIndex === props.pageIndex))
           .flatMap((a) =>
             a.highlightAreas
@@ -401,9 +433,14 @@ export default function App() {
             annotations={chapterAnnotations}
             departments={DEPARTMENTS}
             phases={PHASES}
+            deptFilter={deptFilter}
+            phaseFilter={phaseFilter}
+            onDeptFilter={setDeptFilter}
+            onPhaseFilter={setPhaseFilter}
             onJumpTo={(a) => { jumpToHighlightArea(a.highlightAreas[0]); setSidebarOpen(false); }}
             onDelete={deleteAnnotation}
-            onExport={() => exportToExcel(chapterAnnotations, activeChapter.title)}
+            onEdit={(a) => { setEditingAnnotation(a); setSidebarOpen(false); }}
+            onExport={() => exportToExcel(filteredAnnotations, activeChapter.title)}
             onExportPdf={handleExportPdf}
             exportingPdf={exportingPdf}
             isOpen={sidebarOpen}
@@ -446,7 +483,7 @@ export default function App() {
         {sidebarOpen ? '✕ Cerrar' : `📋 ${chapterAnnotations.length}`}
       </button>
 
-      {/* Annotation form */}
+      {/* New annotation form (after drawing) */}
       {popupMode === 'form' && pendingHighlight && (
         <>
           <div className="form-backdrop" onClick={closePopup} />
@@ -468,6 +505,27 @@ export default function App() {
                 setPendingHighlight(null);
               }}
               onCancel={closePopup}
+            />
+          </div>
+        </>
+      )}
+
+      {/* Edit annotation form (always centered) */}
+      {editingAnnotation && (
+        <>
+          <div className="form-backdrop" onClick={() => setEditingAnnotation(null)} />
+          <div className="floating-form-wrapper edit-mode">
+            <AnnotationForm
+              highlightAreas={editingAnnotation.highlightAreas}
+              dept={DEPARTMENTS.find((d) => d.id === editingAnnotation.departmentId) ?? DEPARTMENTS[0]}
+              departments={DEPARTMENTS}
+              phases={PHASES}
+              initialData={editingAnnotation}
+              onSave={(data) => {
+                updateAnnotation(editingAnnotation.id, data);
+                setEditingAnnotation(null);
+              }}
+              onCancel={() => setEditingAnnotation(null)}
             />
           </div>
         </>

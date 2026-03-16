@@ -1,20 +1,18 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 export default function AnnotationSidebar({
-  annotations, departments, phases, onJumpTo, onDelete, onExport, onExportPdf, exportingPdf,
+  annotations, departments, phases, onJumpTo, onDelete, onEdit, onExport, onExportPdf, exportingPdf,
   isOpen, onClose,
+  deptFilter, phaseFilter, onDeptFilter, onPhaseFilter,
 }) {
-  const [deptFilter,  setDeptFilter]  = useState('all');
-  const [phaseFilter, setPhaseFilter] = useState('all');
-
   const filtered = annotations.filter((a) => {
     if (deptFilter  !== 'all' && a.departmentId !== deptFilter)  return false;
     if (phaseFilter !== 'all' && a.phase        !== phaseFilter) return false;
     return true;
   });
 
-  const toggleDept  = (id) => setDeptFilter( (prev) => prev === id ? 'all' : id);
-  const togglePhase = (id) => setPhaseFilter((prev) => prev === id ? 'all' : id);
+  const toggleDept  = (id) => onDeptFilter(deptFilter  === id ? 'all' : id);
+  const togglePhase = (id) => onPhaseFilter(phaseFilter === id ? 'all' : id);
 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
@@ -108,13 +106,22 @@ export default function AnnotationSidebar({
                     </span>
                   )}
                 </div>
-                <button
-                  className="btn-delete-sm"
-                  onClick={(e) => { e.stopPropagation(); onDelete(a.id); }}
-                  title="Eliminar"
-                >
-                  ×
-                </button>
+                <div className="sidebar-item-actions">
+                  <button
+                    className="btn-edit-sm"
+                    onClick={(e) => { e.stopPropagation(); onEdit(a); }}
+                    title="Editar"
+                  >
+                    ✏
+                  </button>
+                  <button
+                    className="btn-delete-sm"
+                    onClick={(e) => { e.stopPropagation(); onDelete(a.id); }}
+                    title="Eliminar"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
 
               <div className="sidebar-item-location">

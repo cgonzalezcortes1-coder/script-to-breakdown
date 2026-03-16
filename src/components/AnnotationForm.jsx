@@ -3,11 +3,18 @@ import React, { useState, useRef, useEffect } from 'react';
 export default function AnnotationForm({
   highlightAreas,
   dept, departments, phases, onSave, onCancel,
+  initialData, // if provided → edit mode
 }) {
-  const [scene, setScene]               = useState('');
-  const [note, setNote]                 = useState('');
-  const [selectedDept, setSelectedDept] = useState(dept);
-  const [selectedPhase, setSelectedPhase] = useState(phases[1]); // default: Prod
+  const isEdit = !!initialData;
+
+  const [scene, setScene]               = useState(initialData?.scene  ?? '');
+  const [note, setNote]                 = useState(initialData?.note   ?? '');
+  const [selectedDept, setSelectedDept] = useState(
+    departments.find((d) => d.id === initialData?.departmentId) ?? dept
+  );
+  const [selectedPhase, setSelectedPhase] = useState(
+    phases.find((p) => p.id === initialData?.phase) ?? phases[1]
+  );
   const sceneRef = useRef(null);
 
   const pageIndex = highlightAreas[0]?.pageIndex ?? 0;
@@ -33,7 +40,9 @@ export default function AnnotationForm({
   return (
     <div className="annotation-form">
       <div className="form-header" style={{ borderTop: `4px solid ${selectedDept.color}` }}>
-        <span className="form-title">Nueva Anotación · Pág {pageIndex + 1}</span>
+        <span className="form-title">
+          {isEdit ? 'Editar Anotación' : 'Nueva Anotación'} · Pág {pageIndex + 1}
+        </span>
         <button className="form-close-btn" type="button" onClick={onCancel}>✕</button>
       </div>
 
@@ -95,7 +104,7 @@ export default function AnnotationForm({
         <div className="form-actions">
           <button type="button" className="btn-cancel" onClick={onCancel}>Cancelar</button>
           <button type="submit" className="btn-save" style={{ background: selectedDept.color }}>
-            Guardar
+            {isEdit ? 'Actualizar' : 'Guardar'}
           </button>
         </div>
       </form>

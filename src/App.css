@@ -418,6 +418,31 @@ body {
   line-height: 1.3;
 }
 
+.sidebar-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.btn-edit-sm {
+  background: none;
+  border: none;
+  color: var(--g300);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0 3px;
+  line-height: 1;
+  flex-shrink: 0;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.btn-edit-sm:hover {
+  color: var(--orange-d);
+  background: var(--orange-pale);
+}
+
 .btn-delete-sm {
   background: none;
   border: none;
@@ -504,6 +529,15 @@ body {
 .floating-form-wrapper {
   position: fixed;
   z-index: 99999;
+}
+
+/* Edit mode: always centered regardless of screen size */
+.floating-form-wrapper.edit-mode {
+  left: 50% !important;
+  top:  50% !important;
+  transform: translate(-50%, -50%);
+  width: calc(100vw - 32px);
+  max-width: 390px;
 }
 
 /* ============================================================
