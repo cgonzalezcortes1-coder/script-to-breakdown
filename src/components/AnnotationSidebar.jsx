@@ -34,7 +34,7 @@ export default function AnnotationSidebar({
         <div className="filter-row">
           <button
             className={`filter-chip ${deptFilter === 'all' ? 'active-all' : ''}`}
-            onClick={() => setDeptFilter('all')}
+            onClick={() => onDeptFilter('all')}
           >
             Todos
           </button>
@@ -55,7 +55,7 @@ export default function AnnotationSidebar({
         <div className="filter-row">
           <button
             className={`filter-chip ${phaseFilter === 'all' ? 'active-all' : ''}`}
-            onClick={() => setPhaseFilter('all')}
+            onClick={() => onPhaseFilter('all')}
           >
             Todas
           </button>
