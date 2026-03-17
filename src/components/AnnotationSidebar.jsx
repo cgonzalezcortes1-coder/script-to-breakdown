@@ -1,10 +1,19 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 
 export default function AnnotationSidebar({
   annotations, departments, phases, onJumpTo, onDelete, onEdit, onExport, onExportPdf, exportingPdf,
   isOpen, onClose,
   deptFilter, phaseFilter, onDeptFilter, onPhaseFilter,
+  selectedAnnotationId,
 }) {
+  const itemRefs = useRef({});
+
+  // Scroll al ítem seleccionado cuando cambia desde el PDF
+  useEffect(() => {
+    if (selectedAnnotationId && itemRefs.current[selectedAnnotationId]) {
+      itemRefs.current[selectedAnnotationId].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [selectedAnnotationId]);
   const filtered = annotations.filter((a) => {
     if (deptFilter.size  > 0 && !deptFilter.has(a.departmentId))  return false;
     if (phaseFilter.size > 0 && !phaseFilter.has(a.phase))        return false;
@@ -109,7 +118,8 @@ export default function AnnotationSidebar({
           filtered.map((a) => (
             <div
               key={a.id}
-              className="sidebar-item"
+              ref={(el) => { itemRefs.current[a.id] = el; }}
+              className={`sidebar-item ${selectedAnnotationId === a.id ? 'selected' : ''}`}
               style={{ borderLeft: `3px solid ${a.color}` }}
               onClick={() => onJumpTo(a)}
               title="Clic para ir al guión"

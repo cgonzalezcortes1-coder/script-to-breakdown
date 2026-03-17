@@ -58,6 +58,9 @@ export default function App() {
   // ── Editing ────────────────────────────────────────────────
   const [editingAnnotation, setEditingAnnotation] = useState(null);
 
+  // ── Selected annotation (clicked in PDF → highlight in sidebar) ─
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState(null);
+
   // ── Mobile sidebar toggle ──────────────────────────────────
   const [sidebarOpen, setSidebarOpen]     = useState(false);
 
@@ -109,10 +112,11 @@ export default function App() {
     ? annotations.filter((a) => a.chapterId === activeChapter.id)
     : [];
 
-  // Reset filters whenever the user opens a different chapter
+  // Reset filters + selection whenever the user opens a different chapter
   useEffect(() => {
     setDeptFilter(new Set());
     setPhaseFilter(new Set());
+    setSelectedAnnotationId(null);
   }, [activeChapter?.id]);
 
   // Filtered subset shared by both the sidebar list and the PDF highlights
@@ -303,21 +307,31 @@ export default function App() {
           .flatMap((a) =>
             a.highlightAreas
               .filter((area) => area.pageIndex === props.pageIndex)
-              .map((area, idx) => (
-                <div
-                  key={`${a.id}-${idx}`}
-                  style={{
-                    ...props.getCssProperties(area, props.rotation),
-                    background: a.color,
-                    opacity: 0.5,
-                    mixBlendMode: 'multiply',
-                    borderRadius: '2px',
-                    zIndex: 2,
-                    pointerEvents: 'none',
-                  }}
-                  title={`${a.department}${a.phaseLabel ? ' [' + a.phaseLabel + ']' : ''}${a.scene ? ' · Esc ' + a.scene : ''}${a.note ? ': ' + a.note : ''}`}
-                />
-              ))
+              .map((area, idx) => {
+                const isSelected = selectedAnnotationId === a.id;
+                return (
+                  <div
+                    key={`${a.id}-${idx}`}
+                    style={{
+                      ...props.getCssProperties(area, props.rotation),
+                      background: a.color,
+                      opacity: isSelected ? 0.7 : 0.5,
+                      mixBlendMode: 'multiply',
+                      borderRadius: '2px',
+                      zIndex: 2,
+                      pointerEvents: 'auto',
+                      cursor: 'pointer',
+                      outline: isSelected ? `2px solid ${a.color}` : 'none',
+                      outlineOffset: '2px',
+                    }}
+                    title={`${a.department}${a.phaseLabel ? ' [' + a.phaseLabel + ']' : ''}${a.scene ? ' · Esc ' + a.scene : ''}${a.note ? ': ' + a.note : ''}`}
+                    onClick={() => {
+                      setSelectedAnnotationId(a.id);
+                      setSidebarOpen(true);
+                    }}
+                  />
+                );
+              })
           )}
       </div>
     ),
@@ -438,7 +452,7 @@ export default function App() {
             phaseFilter={phaseFilter}
             onDeptFilter={setDeptFilter}
             onPhaseFilter={setPhaseFilter}
-            onJumpTo={(a) => { jumpToHighlightArea(a.highlightAreas[0]); setSidebarOpen(false); }}
+            onJumpTo={(a) => { jumpToHighlightArea(a.highlightAreas[0]); setSidebarOpen(false); setSelectedAnnotationId(a.id); }}
             onDelete={deleteAnnotation}
             onEdit={(a) => { setEditingAnnotation(a); setSidebarOpen(false); }}
             onExport={() => exportToExcel(filteredAnnotations, activeChapter.title)}
@@ -446,6 +460,7 @@ export default function App() {
             exportingPdf={exportingPdf}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
+            selectedAnnotationId={selectedAnnotationId}
           />
         </div>
       </main>
