@@ -173,11 +173,11 @@ export async function exportAnnotatedPdf(pdfUrl, annotations, chapterTitle, onPr
         // ── Collision avoidance: stack overlapping stickers downward ──
         const side   = placeBelow ? 'below' : (placeLeft ? 'left' : 'right');
         const colKey = `${area.pageIndex}-${side}`;
-        const col    = placedStickers.get(colKey) || [];
+        const slots  = placedStickers.get(colKey) || [];   // renamed: 'col' is already the color
         const SGAP   = 4; // points of gap between stacked stickers
         let iter = 0;
         while (iter < 60) {
-          const conflict = col.find((s) =>
+          const conflict = slots.find((s) =>
             stickerY < s.y + s.h + SGAP &&
             stickerY + stickerH > s.y - SGAP
           );
@@ -188,8 +188,8 @@ export async function exportAnnotatedPdf(pdfUrl, annotations, chapterTitle, onPr
         }
         // Re-clamp after nudging
         stickerY = Math.max(4, Math.min(ph - stickerH - 4, stickerY));
-        col.push({ y: stickerY, h: stickerH });
-        placedStickers.set(colKey, col);
+        slots.push({ y: stickerY, h: stickerH });
+        placedStickers.set(colKey, slots);
 
         // ── White sticker box ──────────────────────────────────
         page.drawRectangle({
