@@ -75,6 +75,10 @@ export async function exportAnnotatedPdf(pdfUrl, annotations, chapterTitle, onPr
   onProgress?.(40);
 
   const total = annotations.length || 1;
+  // Track placed sticker bounds per page+side to avoid overlaps
+  // key: `${pageIndex}-${'left'|'right'|'below'}` → [{y, h}]
+  const placedStickers = new Map();
+
   annotations.forEach((ann, annIdx) => {
     const col = hexToRgb(ann.color);
 
@@ -165,6 +169,27 @@ export async function exportAnnotatedPdf(pdfUrl, annotations, chapterTitle, onPr
         }
         // Final clamp: never outside the page regardless of placement
         stickerY = Math.max(4, Math.min(ph - stickerH - 4, stickerY));
+
+        // ── Collision avoidance: stack overlapping stickers downward ──
+        const side   = placeBelow ? 'below' : (placeLeft ? 'left' : 'right');
+        const colKey = `${area.pageIndex}-${side}`;
+        const col    = placedStickers.get(colKey) || [];
+        const SGAP   = 4; // points of gap between stacked stickers
+        let iter = 0;
+        while (iter < 60) {
+          const conflict = col.find((s) =>
+            stickerY < s.y + s.h + SGAP &&
+            stickerY + stickerH > s.y - SGAP
+          );
+          if (!conflict) break;
+          // Push visually below the conflicting sticker (smaller PDF Y)
+          stickerY = conflict.y - stickerH - SGAP;
+          iter++;
+        }
+        // Re-clamp after nudging
+        stickerY = Math.max(4, Math.min(ph - stickerH - 4, stickerY));
+        col.push({ y: stickerY, h: stickerH });
+        placedStickers.set(colKey, col);
 
         // ── White sticker box ──────────────────────────────────
         page.drawRectangle({

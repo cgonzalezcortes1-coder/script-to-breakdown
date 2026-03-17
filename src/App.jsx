@@ -47,8 +47,9 @@ export default function App() {
   const [activeDept, setActiveDept]       = useState(DEPARTMENTS[0]);
 
   // ── Sidebar filters (lifted here so PDF viewer reacts too) ─
-  const [deptFilter,  setDeptFilter]  = useState('all');
-  const [phaseFilter, setPhaseFilter] = useState('all');
+  // Empty Set = show all; non-empty = show only matching ids
+  const [deptFilter,  setDeptFilter]  = useState(new Set());
+  const [phaseFilter, setPhaseFilter] = useState(new Set());
 
   // ── PDF export state ───────────────────────────────────────
   const [exportingPdf, setExportingPdf]   = useState(false);
@@ -110,14 +111,14 @@ export default function App() {
 
   // Reset filters whenever the user opens a different chapter
   useEffect(() => {
-    setDeptFilter('all');
-    setPhaseFilter('all');
+    setDeptFilter(new Set());
+    setPhaseFilter(new Set());
   }, [activeChapter?.id]);
 
   // Filtered subset shared by both the sidebar list and the PDF highlights
   const filteredAnnotations = chapterAnnotations.filter((a) => {
-    if (deptFilter  !== 'all' && a.departmentId !== deptFilter)  return false;
-    if (phaseFilter !== 'all' && a.phase        !== phaseFilter) return false;
+    if (deptFilter.size  > 0 && !deptFilter.has(a.departmentId))  return false;
+    if (phaseFilter.size > 0 && !phaseFilter.has(a.phase))        return false;
     return true;
   });
 

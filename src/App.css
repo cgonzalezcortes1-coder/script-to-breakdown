@@ -338,6 +338,15 @@ body {
   flex-shrink: 0;
 }
 
+.filter-hint {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+  margin-top: 5px;
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
 .sidebar-count {
   padding: 6px 12px;
   font-size: 0.68rem;
@@ -1162,9 +1171,11 @@ body {
 }
 
 /* ============================================================
-   RESPONSIVE — TABLET & MOBILE  (≤ 768 px)
+   RESPONSIVE — TABLET & MOBILE  (≤ 768 px  ó  touch + ≤ 1100 px)
+   Catches phones (≤768) AND tablets like Galaxy Tab S7 (~800px)
+   that report pointer:coarse (touchscreen) but exceed 768px.
    ============================================================ */
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-width: 1100px) and (pointer: coarse) {
 
   /* ── Header ─────────────────────────────────────────────── */
   .app-header {
@@ -1189,7 +1200,8 @@ body {
     flex-wrap: nowrap;
   }
   .viewer-bar::-webkit-scrollbar { display: none; }
-  .viewer-hint { display: none; }
+  .viewer-hint  { display: none; }
+  .filter-hint  { display: none; }
 
   /* Draw mode toggle button */
   .draw-mode-btn {

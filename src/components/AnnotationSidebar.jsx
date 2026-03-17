@@ -6,13 +6,31 @@ export default function AnnotationSidebar({
   deptFilter, phaseFilter, onDeptFilter, onPhaseFilter,
 }) {
   const filtered = annotations.filter((a) => {
-    if (deptFilter  !== 'all' && a.departmentId !== deptFilter)  return false;
-    if (phaseFilter !== 'all' && a.phase        !== phaseFilter) return false;
+    if (deptFilter.size  > 0 && !deptFilter.has(a.departmentId))  return false;
+    if (phaseFilter.size > 0 && !phaseFilter.has(a.phase))        return false;
     return true;
   });
 
-  const toggleDept  = (id) => onDeptFilter(deptFilter  === id ? 'all' : id);
-  const togglePhase = (id) => onPhaseFilter(phaseFilter === id ? 'all' : id);
+  // Normal click → selección exclusiva (clic de nuevo en el mismo = deseleccionar)
+  // Shift+clic  → suma / resta de la selección actual
+  const toggleDept = (id, multi) => {
+    if (multi) {
+      const next = new Set(deptFilter);
+      next.has(id) ? next.delete(id) : next.add(id);
+      onDeptFilter(next);
+    } else {
+      onDeptFilter(deptFilter.size === 1 && deptFilter.has(id) ? new Set() : new Set([id]));
+    }
+  };
+  const togglePhase = (id, multi) => {
+    if (multi) {
+      const next = new Set(phaseFilter);
+      next.has(id) ? next.delete(id) : next.add(id);
+      onPhaseFilter(next);
+    } else {
+      onPhaseFilter(phaseFilter.size === 1 && phaseFilter.has(id) ? new Set() : new Set([id]));
+    }
+  };
 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
@@ -33,17 +51,17 @@ export default function AnnotationSidebar({
         <div className="filter-group-label">Departamento</div>
         <div className="filter-row">
           <button
-            className={`filter-chip ${deptFilter === 'all' ? 'active-all' : ''}`}
-            onClick={() => onDeptFilter('all')}
+            className={`filter-chip ${deptFilter.size === 0 ? 'active-all' : ''}`}
+            onClick={() => onDeptFilter(new Set())}
           >
             Todos
           </button>
           {departments.map((d) => (
             <button
               key={d.id}
-              className={`filter-chip ${deptFilter === d.id ? 'active' : ''}`}
+              className={`filter-chip ${deptFilter.has(d.id) ? 'active' : ''}`}
               style={{ '--filter-color': d.color }}
-              onClick={() => toggleDept(d.id)}
+              onClick={(e) => toggleDept(d.id, e.shiftKey)}
             >
               <span className="filter-dot" style={{ background: d.color }} />
               {d.label}
@@ -54,28 +72,29 @@ export default function AnnotationSidebar({
         <div className="filter-group-label" style={{ marginTop: 6 }}>Etapa</div>
         <div className="filter-row">
           <button
-            className={`filter-chip ${phaseFilter === 'all' ? 'active-all' : ''}`}
-            onClick={() => onPhaseFilter('all')}
+            className={`filter-chip ${phaseFilter.size === 0 ? 'active-all' : ''}`}
+            onClick={() => onPhaseFilter(new Set())}
           >
             Todas
           </button>
           {phases.map((p) => (
             <button
               key={p.id}
-              className={`filter-chip ${phaseFilter === p.id ? 'active' : ''}`}
+              className={`filter-chip ${phaseFilter.has(p.id) ? 'active' : ''}`}
               style={{ '--filter-color': p.color }}
-              onClick={() => togglePhase(p.id)}
+              onClick={(e) => togglePhase(p.id, e.shiftKey)}
             >
               {p.label}
             </button>
           ))}
         </div>
+        <div className="filter-hint">Shift+clic: selección múltiple</div>
       </div>
 
       {/* Count */}
       <div className="sidebar-count">
         {filtered.length} {filtered.length === 1 ? 'anotación' : 'anotaciones'}
-        {(deptFilter !== 'all' || phaseFilter !== 'all') && (
+        {(deptFilter.size > 0 || phaseFilter.size > 0) && (
           <span> (de {annotations.length})</span>
         )}
       </div>
@@ -84,7 +103,7 @@ export default function AnnotationSidebar({
       <div className="sidebar-list">
         {filtered.length === 0 ? (
           <div className="sidebar-empty">
-            Sin anotaciones{deptFilter !== 'all' || phaseFilter !== 'all' ? ' con estos filtros' : ''}
+            Sin anotaciones{deptFilter.size > 0 || phaseFilter.size > 0 ? ' con estos filtros' : ''}
           </div>
         ) : (
           filtered.map((a) => (
