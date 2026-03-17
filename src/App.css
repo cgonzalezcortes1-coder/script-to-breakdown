@@ -868,8 +868,46 @@ body {
 }
 
 /* ============================================================
-   APP HEADER — chapter name pill
+   APP HEADER — chapter name pill + user area
    ============================================================ */
+.app-header-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--g200);
+}
+
+.user-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--g700);
+  white-space: nowrap;
+}
+
+.btn-signout {
+  background: none;
+  border: 1.5px solid var(--g200);
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 3px 7px;
+  line-height: 1;
+  transition: color 0.15s, border-color 0.15s;
+}
+.btn-signout:hover {
+  color: var(--g900);
+  border-color: var(--g500);
+}
+
 .app-header-chapter {
   font-family: 'DM Serif Display', serif;
   font-size: 1rem;
@@ -1187,8 +1225,9 @@ body {
     padding: 10px 16px;
     gap: 10px;
   }
-  .app-title { font-size: 1.1rem; }
-  .app-sub   { display: none; }
+  .app-title  { font-size: 1.1rem; }
+  .app-sub    { display: none; }
+  .user-name  { display: none; }
   .app-header-chapter {
     max-width: 160px;
     font-size: 0.85rem;

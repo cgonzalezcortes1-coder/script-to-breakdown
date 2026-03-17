@@ -9,7 +9,8 @@ import {
 import {
   ref, uploadBytesResumable, getDownloadURL, deleteObject,
 } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { db, storage, auth } from './firebase';
+import { signOut } from 'firebase/auth';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/zoom/lib/styles/index.css';
 import ChapterList from './components/ChapterList';
@@ -378,6 +379,13 @@ export default function App() {
         </div>
         <div className="app-header-chapter">
           {activeChapter.title}
+        </div>
+        <div className="app-header-user">
+          {auth.currentUser?.photoURL && (
+            <img src={auth.currentUser.photoURL} alt="" className="user-avatar" referrerPolicy="no-referrer" />
+          )}
+          <span className="user-name">{auth.currentUser?.displayName?.split(' ')[0]}</span>
+          <button className="btn-signout" onClick={() => signOut(auth)} title="Cerrar sesión">↩</button>
         </div>
       </header>
 
