@@ -14,6 +14,7 @@ Herramienta colaborativa de desglose de guiones para el departamento de sonido. 
 | Anotación PDF (export) | `pdf-lib` |
 | Base de datos | Firestore |
 | Almacenamiento | Firebase Cloud Storage |
+| Autenticación | Firebase Auth (Google Sign-In) |
 | Export Excel | `xlsx` |
 | Estilos | CSS plano con custom properties |
 
@@ -31,13 +32,30 @@ El proyecto se despliega en **Vercel** (push a `main` = deploy automático).
 
 ---
 
+## Variables de entorno
+
+Las credenciales de Firebase viven en `.env.local` (gitignoreado) y en Vercel Environment Variables:
+
+```
+VITE_FB_API_KEY
+VITE_FB_AUTH_DOMAIN
+VITE_FB_PROJECT_ID
+VITE_FB_STORAGE_BUCKET
+VITE_FB_MESSAGING_SENDER_ID
+VITE_FB_APP_ID
+```
+
+Se consumen en `firebase.js` con `import.meta.env.VITE_FB_*`. La `apiKey` de Firebase es pública por diseño — la seguridad real está en las Security Rules.
+
+---
+
 ## Estructura del proyecto
 
 ```
 src/
 ├── App.jsx                        # Componente principal — toda la lógica
 ├── App.css                        # Estilos globales + variables CSS + responsive
-├── firebase.js                    # Instancias db y storage (Firestore + Storage)
+├── firebase.js                    # Instancias db, storage y auth
 ├── main.jsx                       # Punto de entrada React
 ├── components/
 │   ├── AnnotationForm.jsx         # Modal de crear/editar anotación
@@ -45,11 +63,18 @@ src/
 │   ├── AnnotationTable.jsx        # Tabla legacy (sin uso activo)
 │   ├── ChapterList.jsx            # Página de gestión de capítulos
 │   ├── FileUploader.jsx           # Drop zone para subir PDF
-│   └── PasswordGate.jsx           # Auth de sesión por contraseña
+│   └── PasswordGate.jsx           # Auth — Google Sign-In con Firebase
 └── utils/
     ├── excelExport.js             # Genera .xlsx con las anotaciones filtradas
     └── pdfAnnotate.js             # Dibuja rectángulos + stickers sobre el PDF
 ```
+
+**Archivos de configuración en raíz:**
+- `.env.local` — credenciales Firebase (gitignoreado)
+- `.gitignore` — excluye `node_modules/`, `dist/`, `.env*`
+- `firestore.rules` — reglas de seguridad Firestore
+- `storage.rules` — reglas de seguridad Storage
+- `firebase.json` — mapeo de rules para Firebase CLI
 
 ---
 
@@ -118,7 +143,8 @@ PHASES = [
 - `chapters` / `activeChapter` — capítulos y capítulo activo
 - `annotations` / `chapterAnnotations` — todas las anotaciones; filtradas por capítulo
 - `filteredAnnotations` — `chapterAnnotations` filtradas por `deptFilter` + `phaseFilter` (usado en PDF viewer Y en exports)
-- `deptFilter`, `phaseFilter` — estado de filtros (se pasa hacia abajo como props a `AnnotationSidebar`)
+- `deptFilter`, `phaseFilter` — **`Set<string>`** (vacío = mostrar todos); se pasa como props a `AnnotationSidebar`
+- `selectedAnnotationId` — ID de la anotación actualmente seleccionada (click en PDF → scroll en sidebar)
 - `activeDept` — departamento seleccionado para dibujar
 - `drawing`, `pendingHighlight`, `popupMode` — estado del modo dibujo
 - `mobileDrawMode` + `mobileDrawModeRef` — activa dibujo con toque en móvil
@@ -140,17 +166,50 @@ PHASES = [
 
 ## AnnotationSidebar — componente controlado
 
-`AnnotationSidebar` **no tiene estado local de filtros**. Recibe `deptFilter`, `phaseFilter`, `onDeptFilter`, `onPhaseFilter` como props desde `App.jsx`.
+`AnnotationSidebar` **no tiene estado local de filtros**. Recibe todo como props desde `App.jsx`.
 
 ```jsx
 <AnnotationSidebar
-  deptFilter={deptFilter}
-  phaseFilter={phaseFilter}
+  deptFilter={deptFilter}           // Set<string>
+  phaseFilter={phaseFilter}         // Set<string>
   onDeptFilter={setDeptFilter}
   onPhaseFilter={setPhaseFilter}
+  selectedAnnotationId={selectedAnnotationId}
   ...
 />
 ```
+
+### Filtros multi-selección (Shift+clic)
+- **Clic normal**: selección exclusiva (clic en el mismo = deseleccionar todo)
+- **Shift+clic**: añade/quita de la selección actual
+- **Set vacío** = "mostrar todos" (equivale al botón "Todos")
+- Lógica en `toggleDept(id, multi)` / `togglePhase(id, multi)`:
+
+```js
+const toggleDept = (id, multi) => {
+  if (multi) {
+    const next = new Set(deptFilter);
+    next.has(id) ? next.delete(id) : next.add(id);
+    onDeptFilter(next);
+  } else {
+    onDeptFilter(deptFilter.size === 1 && deptFilter.has(id) ? new Set() : new Set([id]));
+  }
+};
+```
+
+### Scroll automático al ítem seleccionado
+`itemRefs` (`useRef({})`) almacena refs DOM por `annotation.id`. Un `useEffect` sobre `selectedAnnotationId` llama `.scrollIntoView({ behavior: 'smooth', block: 'nearest' })`.
+
+---
+
+## Anotaciones clickeables en el PDF
+
+Las áreas de highlight tienen `pointerEvents: 'auto'` y `zIndex: 2`. Al hacer clic:
+1. Se setea `selectedAnnotationId`
+2. Se abre el sidebar (`setSidebarOpen(true)`)
+3. El sidebar hace scroll automático al ítem correspondiente y lo resalta con `.sidebar-item.selected`
+
+El ítem seleccionado también se activa al usar "saltar a anotación" (`onJumpTo`).
 
 ---
 
@@ -172,6 +231,11 @@ Al exportar, cada anotación dibuja:
    - Margen derecho → margen izquierdo → debajo del rect (fallback)
    - Caja blanca semitransparente + línea conectora al rect
    - `wrapText()` incluye `truncateWord()` para que no se salga del margen
+
+### Evitar solapamiento de stickers
+`placedStickers` es un `Map` keyed por `${pageIndex}-${side}` que rastrea los stickers ya colocados en cada columna (derecha/izquierda/abajo). Antes de colocar uno nuevo, itera para empujarlo hacia arriba si hay conflicto.
+
+**Importante**: La variable interna del slot se llama `slots` (no `col`) para evitar shadowing con `const col = hexToRgb(ann.color)` del scope exterior.
 
 **Importante**: La función `toAscii()` elimina tildes porque Helvetica (la fuente embebida) no soporta caracteres no-ASCII.
 
@@ -203,19 +267,32 @@ exportAnnotatedPdf(activeChapter.pdfUrl, filteredAnnotations, activeChapter.titl
 ```
 
 **Breakpoints:**
-- `≤ 768px`: sidebar se convierte en bottom sheet (68vh), aparece FAB, formulario centrado
+- `≤ 768px` **o** dispositivo táctil `≤ 1100px` (`pointer: coarse`): sidebar se convierte en bottom sheet (68vh), aparece FAB, formulario centrado. Cubre tablets como Samsung Galaxy Tab S7 (800px de ancho).
 - `≤ 480px`: ajustes adicionales de padding
 
 **Clases clave:**
 - `.sidebar.open` — activa la animación slide-up en móvil
 - `.floating-form-wrapper.edit-mode` — centra el formulario de edición en todas las pantallas
 - `.draw-mode-btn.active` — botón de anotar con animación pulse
+- `.sidebar-item.selected` — resalta la anotación activa con borde naranja
+- `.filter-hint` — texto "Shift+clic: selección múltiple" (oculto en móvil)
+- `.app-header-user` / `.user-avatar` / `.user-name` / `.btn-signout` — sección de usuario en header
 
 ---
 
 ## Autenticación
 
-`PasswordGate.jsx` protege toda la app con una contraseña única compartida:
-- Almacenada en `sessionStorage` → se pide una vez por sesión del navegador
-- **No es autenticación de usuario**: todos los usuarios comparten el mismo acceso y ven los mismos datos
-- La contraseña se valida comparando contra un valor hard-codeado en el componente
+`PasswordGate.jsx` protege toda la app con **Google Sign-In** (Firebase Auth):
+- `onAuthStateChanged` detecta sesión existente al cargar → no pide login si ya hay sesión
+- Firebase persiste la sesión en IndexedDB automáticamente
+- `authUser === undefined` = cargando | `null` = no autenticado | objeto = autenticado
+- El header muestra foto de perfil, nombre y botón de cerrar sesión (`signOut`)
+- **No hay contraseña compartida**: cada usuario inicia sesión con su propia cuenta Google
+
+### Security Rules
+Tanto Firestore como Storage requieren `request.auth != null`. Se configuran manualmente en Firebase Console (el proyecto usa una cuenta Firebase distinta a la del CLI local):
+
+- **Firestore**: Console → Firestore → Rules
+- **Storage**: Console → Storage → Rules
+- **Google Sign-In**: Console → Authentication → Sign-in method → Google → Activar
+- **Dominio autorizado**: Console → Authentication → Settings → Authorized domains → agregar dominio de Vercel
