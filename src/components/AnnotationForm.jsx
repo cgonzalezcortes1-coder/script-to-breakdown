@@ -86,7 +86,7 @@ export default function AnnotationForm({
           <input
             id="scene-input" ref={sceneRef} type="text"
             value={scene} onChange={(e) => setScene(e.target.value)}
-            placeholder="Ej: 120" className="form-input"
+            placeholder="Ej: 120" className="form-input" maxLength={20}
           />
         </div>
 
@@ -97,7 +97,7 @@ export default function AnnotationForm({
           <textarea
             id="note-input" value={note} onChange={(e) => setNote(e.target.value)}
             placeholder="Ej: Grabar en locación, ambiente exterior"
-            rows={3} className="form-textarea"
+            rows={3} className="form-textarea" maxLength={500}
           />
         </div>
 

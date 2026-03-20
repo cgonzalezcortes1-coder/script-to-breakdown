@@ -12,9 +12,12 @@ export default function ChapterList({
 
   const countFor = (id) => annotations.filter((a) => a.chapterId === id).length;
 
+  const MAX_PDF_MB = 200;
   const handleFile = (f) => {
-    if (f && f.type === 'application/pdf') setFile(f);
-    else alert('Por favor selecciona un archivo PDF.');
+    if (!f) return;
+    if (f.type !== 'application/pdf') { alert('Por favor selecciona un archivo PDF.'); return; }
+    if (f.size > MAX_PDF_MB * 1024 * 1024) { alert(`El archivo supera el límite de ${MAX_PDF_MB} MB.`); return; }
+    setFile(f);
   };
 
   const handleDrop = (e) => {
@@ -122,6 +125,7 @@ export default function ChapterList({
                     placeholder="Ej: Capítulo 3 – El Regreso"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
+                    maxLength={120}
                     autoFocus
                   />
                 </div>

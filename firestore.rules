@@ -1,10 +1,27 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Solo usuarios autenticados (anónimos incluidos) pueden leer/escribir.
-    // Esto bloquea cualquier acceso directo a la API sin pasar por el login.
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+
+    // Verifica que el email del usuario autenticado esté en la whitelist
+    function isAllowed() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email));
+    }
+
+    // allowedUsers: cada usuario solo puede leer su propio documento
+    // Escritura bloqueada desde el cliente — solo desde Firebase Console
+    match /allowedUsers/{email} {
+      allow read:  if request.auth != null && request.auth.token.email == email;
+      allow write: if false;
+    }
+
+    // Capítulos y anotaciones: solo usuarios en la whitelist
+    match /chapters/{doc} {
+      allow read, write: if isAllowed();
+    }
+
+    match /annotations/{doc} {
+      allow read, write: if isAllowed();
     }
   }
 }
