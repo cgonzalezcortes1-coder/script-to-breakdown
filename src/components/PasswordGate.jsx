@@ -1,21 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../firebase';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 
 const provider = new GoogleAuthProvider();
 
 export default function PasswordGate({ children }) {
-  // undefined = cargando auth, null = no autenticado, objeto = usuario
-  const [authUser, setAuthUser] = useState(undefined);
-  const [error, setError]       = useState('');
+  // undefined = cargando, null = no autenticado, objeto = usuario autorizado
+  const [authUser, setAuthUser]   = useState(undefined);
+  const [denied, setDenied]       = useState(false);
+  const [error, setError]         = useState('');
 
   useEffect(() => {
-    // Firebase persiste la sesión en IndexedDB automáticamente
-    return onAuthStateChanged(auth, (u) => setAuthUser(u ?? null));
+    return onAuthStateChanged(auth, async (u) => {
+      if (!u) { setAuthUser(null); setDenied(false); return; }
+
+      // Verificar si el email está en la whitelist
+      const snap = await getDoc(doc(db, 'allowedUsers', u.email));
+      if (snap.exists()) {
+        setAuthUser(u);
+        setDenied(false);
+      } else {
+        await signOut(auth);
+        setAuthUser(null);
+        setDenied(true);
+      }
+    });
   }, []);
 
   const signIn = async () => {
     setError('');
+    setDenied(false);
     try {
       await signInWithPopup(auth, provider);
     } catch (err) {
@@ -27,7 +42,7 @@ export default function PasswordGate({ children }) {
   };
 
   if (authUser === undefined) return null;   // cargando
-  if (authUser)              return children; // autenticado
+  if (authUser)              return children; // autenticado y autorizado
 
   return (
     <div style={styles.overlay}>
@@ -42,14 +57,29 @@ export default function PasswordGate({ children }) {
 
         <div style={styles.divider} />
 
-        <p style={styles.desc}>
-          Accede con la cuenta Google del equipo para continuar.
-        </p>
-
-        <button onClick={signIn} style={styles.googleBtn}>
-          <GoogleIcon />
-          Acceder con Google
-        </button>
+        {denied ? (
+          <>
+            <p style={{ ...styles.desc, color: '#C0392B', fontWeight: 600 }}>
+              Tu cuenta no tiene acceso a esta aplicación.
+            </p>
+            <p style={{ ...styles.desc, marginBottom: '20px' }}>
+              Contacta al administrador para solicitar acceso.
+            </p>
+            <button onClick={signIn} style={{ ...styles.googleBtn, fontSize: '0.8rem' }}>
+              Intentar con otra cuenta
+            </button>
+          </>
+        ) : (
+          <>
+            <p style={styles.desc}>
+              Accede con la cuenta Google del equipo para continuar.
+            </p>
+            <button onClick={signIn} style={styles.googleBtn}>
+              <GoogleIcon />
+              Acceder con Google
+            </button>
+          </>
+        )}
 
         {error && <div style={styles.errorMsg}>{error}</div>}
 
