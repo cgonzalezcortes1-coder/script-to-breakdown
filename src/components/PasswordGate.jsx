@@ -1,28 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 const provider = new GoogleAuthProvider();
 
+export const AuthContext = createContext({ isAdmin: false });
+export const useAuth = () => useContext(AuthContext);
+
 export default function PasswordGate({ children }) {
   // undefined = cargando, null = no autenticado, objeto = usuario autorizado
   const [authUser, setAuthUser]   = useState(undefined);
+  const [isAdmin, setIsAdmin]     = useState(false);
   const [denied, setDenied]       = useState(false);
   const [error, setError]         = useState('');
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
-      if (!u) { setAuthUser(null); setDenied(false); return; }
+      if (!u) { setAuthUser(null); setIsAdmin(false); setDenied(false); return; }
 
       // Verificar si el email está en la whitelist
       const snap = await getDoc(doc(db, 'allowedUsers', u.email));
       if (snap.exists()) {
         setAuthUser(u);
+        setIsAdmin(snap.data()?.isAdmin === true);
         setDenied(false);
       } else {
         await signOut(auth);
         setAuthUser(null);
+        setIsAdmin(false);
         setDenied(true);
       }
     });
@@ -42,7 +48,7 @@ export default function PasswordGate({ children }) {
   };
 
   if (authUser === undefined) return null;   // cargando
-  if (authUser)              return children; // autenticado y autorizado
+  if (authUser)              return <AuthContext.Provider value={{ isAdmin }}>{children}</AuthContext.Provider>;
 
   return (
     <div style={styles.overlay}>

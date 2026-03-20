@@ -14,6 +14,7 @@ import { signOut } from 'firebase/auth';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/zoom/lib/styles/index.css';
 import ChapterList from './components/ChapterList';
+import { useAuth } from './components/PasswordGate';
 import AnnotationForm from './components/AnnotationForm';
 import AnnotationSidebar from './components/AnnotationSidebar';
 import { exportToExcel } from './utils/excelExport';
@@ -36,6 +37,8 @@ export const PHASES = [
 const WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
 
 export default function App() {
+  const { isAdmin } = useAuth();
+
   // ── Chapter state ──────────────────────────────────────────
   const [chapters, setChapters]           = useState([]);
   const [activeChapter, setActiveChapter] = useState(null);
@@ -364,6 +367,7 @@ export default function App() {
           onCreate={handleChapterCreate}
           onSelect={setActiveChapter}
           onDelete={handleChapterDelete}
+          isAdmin={isAdmin}
         />
       </div>
     );

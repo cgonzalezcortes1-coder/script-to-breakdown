@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 
 export default function ChapterList({
-  chapters, annotations, uploading, uploadProgress, onCreate, onSelect, onDelete,
+  chapters, annotations, uploading, uploadProgress, onCreate, onSelect, onDelete, isAdmin,
 }) {
   const [showForm, setShowForm]   = useState(false);
   const [title, setTitle]         = useState('');
@@ -85,20 +85,22 @@ export default function ChapterList({
                 </div>
                 <div className="chapter-card-footer">
                   <span className="chapter-open-hint">Clic para abrir →</span>
-                  <button
-                    className={`chapter-delete-btn ${isConfirm ? 'confirm' : ''}`}
-                    onClick={(e) => handleDeleteClick(e, ch)}
-                    title={isConfirm ? 'Clic de nuevo para confirmar' : 'Eliminar capítulo'}
-                  >
-                    {isConfirm ? '¿Eliminar?' : '×'}
-                  </button>
+                  {isAdmin && (
+                    <button
+                      className={`chapter-delete-btn ${isConfirm ? 'confirm' : ''}`}
+                      onClick={(e) => handleDeleteClick(e, ch)}
+                      title={isConfirm ? 'Clic de nuevo para confirmar' : 'Eliminar capítulo'}
+                    >
+                      {isConfirm ? '¿Eliminar?' : '×'}
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
 
-          {/* Add new chapter */}
-          {!showForm ? (
+          {/* Add new chapter — solo admins */}
+          {isAdmin && !showForm ? (
             <button className="chapter-card chapter-add-card" onClick={() => setShowForm(true)}>
               <div className="chapter-add-icon">＋</div>
               <div className="chapter-add-label">Nuevo Capítulo</div>
