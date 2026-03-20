@@ -100,7 +100,7 @@ export default function ChapterList({
           })}
 
           {/* Add new chapter — solo admins */}
-          {isAdmin && !showForm ? (
+          {isAdmin && (!showForm ? (
             <button className="chapter-card chapter-add-card" onClick={() => setShowForm(true)}>
               <div className="chapter-add-icon">＋</div>
               <div className="chapter-add-label">Nuevo Capítulo</div>
@@ -169,7 +169,7 @@ export default function ChapterList({
                 </div>
               </form>
             </div>
-          )}
+          ))}
         </div>
       </div>
     </div>
