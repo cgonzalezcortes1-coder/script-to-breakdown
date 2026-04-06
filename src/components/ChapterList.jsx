@@ -1,7 +1,10 @@
 import React, { useState, useRef } from 'react';
+import { auth } from '../firebase';
+import { signOut } from 'firebase/auth';
 
 export default function ChapterList({
   chapters, annotations, uploading, uploadProgress, onCreate, onSelect, onDelete, isAdmin,
+  projectTitle, onBack,
 }) {
   const [showForm, setShowForm]   = useState(false);
   const [title, setTitle]         = useState('');
@@ -53,8 +56,20 @@ export default function ChapterList({
       {/* Header */}
       <header className="app-header">
         <div className="app-header-left">
+          {onBack && (
+            <button className="btn-outline" onClick={onBack} style={{ marginRight: 12 }}>
+              ← Proyectos
+            </button>
+          )}
           <h1 className="app-title"><span>HASAN</span> Script Breakdown</h1>
-          <span className="app-sub">Desglose de Sonido · Sound Department</span>
+          {projectTitle && <span className="app-sub">{projectTitle}</span>}
+        </div>
+        <div className="app-header-user">
+          {auth.currentUser?.photoURL && (
+            <img src={auth.currentUser.photoURL} alt="" className="user-avatar" referrerPolicy="no-referrer" />
+          )}
+          <span className="user-name">{auth.currentUser?.displayName?.split(' ')[0]}</span>
+          <button className="btn-signout" onClick={() => signOut(auth)} title="Cerrar sesión">↩</button>
         </div>
       </header>
 

@@ -15,7 +15,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Capítulos y anotaciones: solo usuarios en la whitelist
+    // Proyectos, capítulos y anotaciones: solo usuarios en la whitelist
+    match /projects/{doc} {
+      allow read, write: if isAllowed();
+    }
+
     match /chapters/{doc} {
       allow read, write: if isAllowed();
     }

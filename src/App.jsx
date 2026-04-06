@@ -14,6 +14,7 @@ import { signOut } from 'firebase/auth';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/zoom/lib/styles/index.css';
 import ChapterList from './components/ChapterList';
+import ProjectList from './components/ProjectList';
 import { useAuth } from './components/PasswordGate';
 import AnnotationForm from './components/AnnotationForm';
 import AnnotationSidebar from './components/AnnotationSidebar';
@@ -38,6 +39,10 @@ const WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js
 
 export default function App() {
   const { isAdmin } = useAuth();
+
+  // ── Project state ──────────────────────────────────────────
+  const [projects, setProjects]           = useState([]);
+  const [activeProject, setActiveProject] = useState(null);
 
   // ── Chapter state ──────────────────────────────────────────
   const [chapters, setChapters]           = useState([]);
@@ -85,6 +90,23 @@ export default function App() {
   drawingRef.current    = drawing;
   activeDeptRef.current = activeDept;
   popupModeRef.current  = popupMode;
+
+  // ── Load projects ──────────────────────────────────────────
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'projects'), (snap) => {
+      setProjects(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => a.createdAt - b.createdAt)
+      );
+    });
+    return () => unsub();
+  }, []);
+
+  // Reset activeChapter when project changes
+  useEffect(() => {
+    setActiveChapter(null);
+  }, [activeProject?.id]);
 
   // ── Load chapters ──────────────────────────────────────────
   useEffect(() => {
@@ -207,6 +229,7 @@ export default function App() {
         await setDoc(chapterRef, {
           title,
           pdfUrl,
+          projectId: activeProject.id,
           order: chapters.length + 1,
           createdAt: Date.now(),
         });
@@ -229,6 +252,34 @@ export default function App() {
     }
     // Delete chapter doc
     await deleteDoc(doc(db, 'chapters', chapter.id));
+  };
+
+  // ── Project CRUD ───────────────────────────────────────────
+  const handleProjectCreate = async (title) => {
+    await addDoc(collection(db, 'projects'), { title, createdAt: Date.now() });
+  };
+
+  const handleProjectDelete = async (project) => {
+    // Find all chapters in this project
+    const chapSnap = await getDocs(query(collection(db, 'chapters'), where('projectId', '==', project.id)));
+    if (!chapSnap.empty) {
+      for (const chapDoc of chapSnap.docs) {
+        // Delete annotations for each chapter
+        const annSnap = await getDocs(query(collection(db, 'annotations'), where('chapterId', '==', chapDoc.id)));
+        if (!annSnap.empty) {
+          const batch = writeBatch(db);
+          annSnap.docs.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+        }
+        // Delete PDF from storage
+        try { await deleteObject(ref(storage, `scripts/${chapDoc.id}.pdf`)); } catch {}
+      }
+      // Delete all chapters
+      const batch = writeBatch(db);
+      chapSnap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+    await deleteDoc(doc(db, 'projects', project.id));
   };
 
   // ── Annotation CRUD ────────────────────────────────────────
@@ -355,12 +406,29 @@ export default function App() {
     );
   }
 
+  // ── Project list screen ────────────────────────────────────
+  if (!activeProject) {
+    return (
+      <div className="app">
+        <ProjectList
+          projects={projects}
+          chapters={chapters}
+          onCreate={handleProjectCreate}
+          onSelect={setActiveProject}
+          onDelete={handleProjectDelete}
+          isAdmin={isAdmin}
+        />
+      </div>
+    );
+  }
+
   // ── Chapter list screen ────────────────────────────────────
   if (!activeChapter) {
+    const projectChapters = chapters.filter((c) => c.projectId === activeProject.id);
     return (
       <div className="app">
         <ChapterList
-          chapters={chapters}
+          chapters={projectChapters}
           annotations={annotations}
           uploading={uploading}
           uploadProgress={uploadProgress}
@@ -368,6 +436,8 @@ export default function App() {
           onSelect={setActiveChapter}
           onDelete={handleChapterDelete}
           isAdmin={isAdmin}
+          projectTitle={activeProject.title}
+          onBack={() => setActiveProject(null)}
         />
       </div>
     );
