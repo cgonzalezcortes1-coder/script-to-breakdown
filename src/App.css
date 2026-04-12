@@ -892,6 +892,20 @@ body {
   white-space: nowrap;
 }
 
+.btn-lang {
+  background: none;
+  border: 1px solid var(--g300);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--g500);
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.15s, border-color 0.15s;
+}
+.btn-lang:hover { color: var(--text); border-color: var(--text); }
+
 .btn-signout {
   background: none;
   border: 1.5px solid var(--g200);

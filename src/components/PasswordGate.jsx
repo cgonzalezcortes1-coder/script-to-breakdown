@@ -2,6 +2,7 @@ import React, { useState, useEffect, createContext, useContext } from 'react';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { useI18n } from '../i18n';
 
 const provider = new GoogleAuthProvider();
 
@@ -9,6 +10,8 @@ export const AuthContext = createContext({ isAdmin: false });
 export const useAuth = () => useContext(AuthContext);
 
 export default function PasswordGate({ children }) {
+  const { t, lang, toggleLang } = useI18n();
+
   // undefined = cargando, null = no autenticado, objeto = usuario autorizado
   const [authUser, setAuthUser]   = useState(undefined);
   const [isAdmin, setIsAdmin]     = useState(false);
@@ -41,7 +44,7 @@ export default function PasswordGate({ children }) {
       await signInWithPopup(auth, provider);
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
-        setError('Error al iniciar sesión. Intenta de nuevo.');
+        setError(t('loginError'));
         console.error(err);
       }
     }
@@ -58,7 +61,7 @@ export default function PasswordGate({ children }) {
           <div style={styles.brandTitle}>
             <span style={styles.brandOrange}>HASAN</span> Script Breakdown
           </div>
-          <div style={styles.brandSub}>Desglose de Sonido · Sound Department</div>
+          <div style={styles.brandSub}>{t('appSubtitle')}</div>
         </div>
 
         <div style={styles.divider} />
@@ -66,30 +69,35 @@ export default function PasswordGate({ children }) {
         {denied ? (
           <>
             <p style={{ ...styles.desc, color: '#C0392B', fontWeight: 600 }}>
-              Tu cuenta no tiene acceso a esta aplicación.
+              {t('accessDenied')}
             </p>
             <p style={{ ...styles.desc, marginBottom: '20px' }}>
-              Contacta al administrador para solicitar acceso.
+              {t('contactAdmin')}
             </p>
             <button onClick={signIn} style={{ ...styles.googleBtn, fontSize: '0.8rem' }}>
-              Intentar con otra cuenta
+              {t('tryAnother')}
             </button>
           </>
         ) : (
           <>
             <p style={styles.desc}>
-              Accede con la cuenta Google del equipo para continuar.
+              {t('loginDesc')}
             </p>
             <button onClick={signIn} style={styles.googleBtn}>
               <GoogleIcon />
-              Acceder con Google
+              {t('loginBtn')}
             </button>
           </>
         )}
 
         {error && <div style={styles.errorMsg}>{error}</div>}
 
-        <div style={styles.footer}>escuchar es mirar</div>
+        <div style={styles.footerRow}>
+          <div style={styles.motto}>{t('motto')}</div>
+          <button onClick={toggleLang} style={styles.langBtn}>
+            {lang === 'es' ? 'EN' : 'ES'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -141,5 +149,14 @@ const styles = {
     transition: 'border-color 0.15s, box-shadow 0.15s',
   },
   errorMsg: { marginTop: '12px', fontSize: '0.75rem', color: '#C0392B', fontWeight: 600, textAlign: 'center' },
-  footer: { marginTop: '28px', textAlign: 'center', fontSize: '0.68rem', color: '#CACACA', fontStyle: 'italic', letterSpacing: '0.05em' },
+  footerRow: {
+    marginTop: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  },
+  motto: { fontSize: '0.68rem', color: '#CACACA', fontStyle: 'italic', letterSpacing: '0.05em' },
+  langBtn: {
+    background: 'none', border: '1px solid #CACACA', borderRadius: '4px',
+    padding: '2px 8px', fontSize: '0.68rem', fontWeight: 700, color: '#8A8A8A',
+    cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+    transition: 'color 0.15s, border-color 0.15s',
+  },
 };

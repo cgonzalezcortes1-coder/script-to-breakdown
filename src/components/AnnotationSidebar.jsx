@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import { useI18n } from '../i18n';
 
 export default function AnnotationSidebar({
   annotations, departments, phases, onJumpTo, onDelete, onEdit, onExport, onExportPdf, exportingPdf,
@@ -6,6 +7,7 @@ export default function AnnotationSidebar({
   deptFilter, phaseFilter, onDeptFilter, onPhaseFilter,
   selectedAnnotationId,
 }) {
+  const { t } = useI18n();
   const itemRefs = useRef({});
 
   // Scroll al ítem seleccionado cuando cambia desde el PDF
@@ -20,8 +22,6 @@ export default function AnnotationSidebar({
     return true;
   });
 
-  // Normal click → selección exclusiva (clic de nuevo en el mismo = deseleccionar)
-  // Shift+clic  → suma / resta de la selección actual
   const toggleDept = (id, multi) => {
     if (multi) {
       const next = new Set(deptFilter);
@@ -44,26 +44,24 @@ export default function AnnotationSidebar({
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
 
-      {/* Mobile drag handle (hidden on desktop via CSS) */}
       <div className="sidebar-handle" onClick={onClose}>
         <div className="sidebar-handle-bar" />
       </div>
 
-      {/* Mobile close row (hidden on desktop via CSS) */}
       <div className="sidebar-close-row">
-        <span className="sidebar-close-label">Anotaciones</span>
-        <button className="sidebar-close-x" onClick={onClose} aria-label="Cerrar">✕</button>
+        <span className="sidebar-close-label">{t('annotations')}</span>
+        <button className="sidebar-close-x" onClick={onClose} aria-label={t('closeSidebar')}>✕</button>
       </div>
 
       {/* Filters */}
       <div className="sidebar-filters">
-        <div className="filter-group-label">Departamento</div>
+        <div className="filter-group-label">{t('department')}</div>
         <div className="filter-row">
           <button
             className={`filter-chip ${deptFilter.size === 0 ? 'active-all' : ''}`}
             onClick={() => onDeptFilter(new Set())}
           >
-            Todos
+            {t('allDepts')}
           </button>
           {departments.map((d) => (
             <button
@@ -78,13 +76,13 @@ export default function AnnotationSidebar({
           ))}
         </div>
 
-        <div className="filter-group-label" style={{ marginTop: 6 }}>Etapa</div>
+        <div className="filter-group-label" style={{ marginTop: 6 }}>{t('phase')}</div>
         <div className="filter-row">
           <button
             className={`filter-chip ${phaseFilter.size === 0 ? 'active-all' : ''}`}
             onClick={() => onPhaseFilter(new Set())}
           >
-            Todas
+            {t('allPhases')}
           </button>
           {phases.map((p) => (
             <button
@@ -97,14 +95,14 @@ export default function AnnotationSidebar({
             </button>
           ))}
         </div>
-        <div className="filter-hint">Shift+clic: selección múltiple</div>
+        <div className="filter-hint">{t('shiftClickHint')}</div>
       </div>
 
       {/* Count */}
       <div className="sidebar-count">
-        {filtered.length} {filtered.length === 1 ? 'anotación' : 'anotaciones'}
+        {filtered.length} {filtered.length === 1 ? t('annotationSingular') : t('annotationPlural')}
         {(deptFilter.size > 0 || phaseFilter.size > 0) && (
-          <span> (de {annotations.length})</span>
+          <span> ({t('of')} {annotations.length})</span>
         )}
       </div>
 
@@ -112,7 +110,7 @@ export default function AnnotationSidebar({
       <div className="sidebar-list">
         {filtered.length === 0 ? (
           <div className="sidebar-empty">
-            Sin anotaciones{deptFilter.size > 0 || phaseFilter.size > 0 ? ' con estos filtros' : ''}
+            {deptFilter.size > 0 || phaseFilter.size > 0 ? t('noAnnotationsFiltered') : t('noAnnotations')}
           </div>
         ) : (
           filtered.map((a) => (
@@ -122,7 +120,7 @@ export default function AnnotationSidebar({
               className={`sidebar-item ${selectedAnnotationId === a.id ? 'selected' : ''}`}
               style={{ borderLeft: `3px solid ${a.color}` }}
               onClick={() => onJumpTo(a)}
-              title="Clic para ir al guión"
+              title={t('jumpToScript')}
             >
               <div className="sidebar-item-header">
                 <div className="sidebar-item-badges">
@@ -139,14 +137,14 @@ export default function AnnotationSidebar({
                   <button
                     className="btn-edit-sm"
                     onClick={(e) => { e.stopPropagation(); onEdit(a); }}
-                    title="Editar"
+                    title={t('edit')}
                   >
                     ✏
                   </button>
                   <button
                     className="btn-delete-sm"
                     onClick={(e) => { e.stopPropagation(); onDelete(a.id); }}
-                    title="Eliminar"
+                    title={t('delete')}
                   >
                     ×
                   </button>
@@ -154,7 +152,7 @@ export default function AnnotationSidebar({
               </div>
 
               <div className="sidebar-item-location">
-                Pág {a.pageIndex + 1}{a.scene ? ` · Esc ${a.scene}` : ''}
+                {t('page')} {a.pageIndex + 1}{a.scene ? ` · ${t('scene')} ${a.scene}` : ''}
               </div>
 
               {a.note && (
@@ -168,15 +166,15 @@ export default function AnnotationSidebar({
       {/* Footer */}
       <div className="sidebar-footer">
         <button className="btn-export sidebar-export" onClick={onExport}>
-          ⬇ Excel
+          {t('excelExport')}
         </button>
         <button
           className="btn-export sidebar-export btn-export-pdf"
           onClick={onExportPdf}
           disabled={exportingPdf}
-          title="Descarga el PDF con los rectángulos y notas dibujados"
+          title={t('pdfExportTooltip')}
         >
-          {exportingPdf ? '⏳ Generando…' : '⬇ PDF con notas'}
+          {exportingPdf ? t('pdfExporting') : t('pdfExport')}
         </button>
       </div>
     </aside>

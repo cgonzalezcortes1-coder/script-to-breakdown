@@ -1,11 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
+import { useI18n } from '../i18n';
 
 export default function ChapterList({
   chapters, annotations, uploading, uploadProgress, onCreate, onSelect, onDelete, isAdmin,
   projectTitle, onBack,
 }) {
+  const { t } = useI18n();
   const [showForm, setShowForm]   = useState(false);
   const [title, setTitle]         = useState('');
   const [file, setFile]           = useState(null);
@@ -18,8 +20,8 @@ export default function ChapterList({
   const MAX_PDF_MB = 200;
   const handleFile = (f) => {
     if (!f) return;
-    if (f.type !== 'application/pdf') { alert('Por favor selecciona un archivo PDF.'); return; }
-    if (f.size > MAX_PDF_MB * 1024 * 1024) { alert(`El archivo supera el límite de ${MAX_PDF_MB} MB.`); return; }
+    if (f.type !== 'application/pdf') { alert(t('selectPdfFile')); return; }
+    if (f.size > MAX_PDF_MB * 1024 * 1024) { alert(t('fileTooLarge').replace('{max}', MAX_PDF_MB)); return; }
     setFile(f);
   };
 
@@ -32,7 +34,7 @@ export default function ChapterList({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim()) return;
-    if (!file) { alert('Selecciona un PDF para este capítulo.'); return; }
+    if (!file) { alert(t('selectPdf')); return; }
     onCreate(title.trim(), file);
     setTitle('');
     setFile(null);
@@ -58,7 +60,7 @@ export default function ChapterList({
         <div className="app-header-left">
           {onBack && (
             <button className="btn-outline" onClick={onBack} style={{ marginRight: 12 }}>
-              ← Proyectos
+              {t('backToProjects')}
             </button>
           )}
           <h1 className="app-title"><span>HASAN</span> Script Breakdown</h1>
@@ -69,7 +71,7 @@ export default function ChapterList({
             <img src={auth.currentUser.photoURL} alt="" className="user-avatar" referrerPolicy="no-referrer" />
           )}
           <span className="user-name">{auth.currentUser?.displayName?.split(' ')[0]}</span>
-          <button className="btn-signout" onClick={() => signOut(auth)} title="Cerrar sesión">↩</button>
+          <button className="btn-signout" onClick={() => signOut(auth)} title={t('signOut')}>↩</button>
         </div>
       </header>
 
@@ -77,8 +79,8 @@ export default function ChapterList({
       <div className="chapter-body">
         <div className="chapter-section-label">
           {chapters.length === 0
-            ? 'Aún no hay capítulos. Crea el primero.'
-            : `${chapters.length} ${chapters.length === 1 ? 'capítulo' : 'capítulos'}`}
+            ? t('noChapters')
+            : `${chapters.length} ${chapters.length === 1 ? t('chapterSingular') : t('chapters')}`}
         </div>
 
         <div className="chapter-grid">
@@ -93,20 +95,20 @@ export default function ChapterList({
                 className="chapter-card"
                 onClick={() => onSelect(ch)}
               >
-                <div className="chapter-card-order">Capítulo {ch.order}</div>
+                <div className="chapter-card-order">{t('chapter')} {ch.order}</div>
                 <div className="chapter-card-title">{ch.title}</div>
                 <div className="chapter-card-meta">
-                  {count} {count === 1 ? 'anotación' : 'anotaciones'}
+                  {count} {count === 1 ? t('annotationSingular') : t('annotationPlural')}
                 </div>
                 <div className="chapter-card-footer">
-                  <span className="chapter-open-hint">Clic para abrir →</span>
+                  <span className="chapter-open-hint">{t('clickToOpen')}</span>
                   {isAdmin && (
                     <button
                       className={`chapter-delete-btn ${isConfirm ? 'confirm' : ''}`}
                       onClick={(e) => handleDeleteClick(e, ch)}
-                      title={isConfirm ? 'Clic de nuevo para confirmar' : 'Eliminar capítulo'}
+                      title={isConfirm ? t('confirmDelete') : t('deleteChapter')}
                     >
-                      {isConfirm ? '¿Eliminar?' : '×'}
+                      {isConfirm ? t('confirmDelete') : '×'}
                     </button>
                   )}
                 </div>
@@ -118,12 +120,12 @@ export default function ChapterList({
           {isAdmin && (!showForm ? (
             <button className="chapter-card chapter-add-card" onClick={() => setShowForm(true)}>
               <div className="chapter-add-icon">＋</div>
-              <div className="chapter-add-label">Nuevo Capítulo</div>
+              <div className="chapter-add-label">{t('newChapter')}</div>
             </button>
           ) : uploading ? (
             <div className="chapter-card chapter-uploading-card">
               <div className="upload-progress-icon">📤</div>
-              <div className="upload-progress-label">Subiendo PDF…</div>
+              <div className="upload-progress-label">{t('uploadingPdf')}</div>
               <div className="progress-bar-track" style={{ width: '100%' }}>
                 <div className="progress-bar-fill" style={{ width: `${uploadProgress}%` }} />
               </div>
@@ -132,14 +134,14 @@ export default function ChapterList({
           ) : (
             <div className="chapter-card chapter-form-card">
               <form onSubmit={handleSubmit} className="chapter-form">
-                <div className="chapter-form-title">Nuevo Capítulo</div>
+                <div className="chapter-form-title">{t('newChapter')}</div>
 
                 <div className="form-field">
-                  <label className="form-label">Título</label>
+                  <label className="form-label">{t('chapterTitle')}</label>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Ej: Capítulo 3 – El Regreso"
+                    placeholder={t('chapterTitlePlaceholder')}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     maxLength={120}
@@ -148,7 +150,7 @@ export default function ChapterList({
                 </div>
 
                 <div className="form-field">
-                  <label className="form-label">Guión PDF</label>
+                  <label className="form-label">{t('scriptPdf')}</label>
                   <div
                     className={`chapter-drop-zone ${dragging ? 'dragging' : ''} ${file ? 'has-file' : ''}`}
                     onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -158,7 +160,7 @@ export default function ChapterList({
                   >
                     {file
                       ? <><span className="drop-file-icon">📄</span><span className="drop-file-name">{file.name}</span></>
-                      : <><span className="drop-icon">📂</span><span>Arrastra el PDF aquí o clic para elegir</span></>
+                      : <><span className="drop-icon">📂</span><span>{t('dropPdf')}</span></>
                     }
                     <input
                       ref={fileInputRef}
@@ -176,10 +178,10 @@ export default function ChapterList({
                     className="btn-cancel"
                     onClick={() => { setShowForm(false); setTitle(''); setFile(null); }}
                   >
-                    Cancelar
+                    {t('cancel')}
                   </button>
                   <button type="submit" className="btn-primary" style={{ padding: '8px 18px', fontSize: '0.85rem' }}>
-                    Crear →
+                    {t('create')}
                   </button>
                 </div>
               </form>

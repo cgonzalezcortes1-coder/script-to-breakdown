@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useI18n } from '../i18n';
 
 export default function AnnotationForm({
   highlightAreas,
   dept, departments, phases, onSave, onCancel,
   initialData, // if provided → edit mode
 }) {
+  const { t } = useI18n();
   const isEdit = !!initialData;
 
   const [scene, setScene]               = useState(initialData?.scene  ?? '');
@@ -41,14 +43,14 @@ export default function AnnotationForm({
     <div className="annotation-form">
       <div className="form-header" style={{ borderTop: `4px solid ${selectedDept.color}` }}>
         <span className="form-title">
-          {isEdit ? 'Editar Anotación' : 'Nueva Anotación'} · Pág {pageIndex + 1}
+          {isEdit ? t('editAnnotation') : t('newAnnotation')} · {t('page')} {pageIndex + 1}
         </span>
         <button className="form-close-btn" type="button" onClick={onCancel}>✕</button>
       </div>
 
       <form onSubmit={handleSubmit} className="form-body">
         <div className="form-field">
-          <label className="form-label">Departamento</label>
+          <label className="form-label">{t('department')}</label>
           <div className="dept-chip-row">
             {departments.map((d) => (
               <button
@@ -64,7 +66,7 @@ export default function AnnotationForm({
         </div>
 
         <div className="form-field">
-          <label className="form-label">Etapa</label>
+          <label className="form-label">{t('phase')}</label>
           <div className="dept-chip-row">
             {phases.map((p) => (
               <button
@@ -81,30 +83,30 @@ export default function AnnotationForm({
 
         <div className="form-field">
           <label className="form-label" htmlFor="scene-input">
-            Escena <span className="form-optional">(opcional)</span>
+            {t('sceneLabel')} <span className="form-optional">{t('optional')}</span>
           </label>
           <input
             id="scene-input" ref={sceneRef} type="text"
             value={scene} onChange={(e) => setScene(e.target.value)}
-            placeholder="Ej: 120" className="form-input" maxLength={20}
+            placeholder={t('scenePlaceholder')} className="form-input" maxLength={20}
           />
         </div>
 
         <div className="form-field">
           <label className="form-label" htmlFor="note-input">
-            Comentario <span className="form-optional">(opcional)</span>
+            {t('commentLabel')} <span className="form-optional">{t('optional')}</span>
           </label>
           <textarea
             id="note-input" value={note} onChange={(e) => setNote(e.target.value)}
-            placeholder="Ej: Grabar en locación, ambiente exterior"
+            placeholder={t('commentPlaceholder')}
             rows={3} className="form-textarea" maxLength={500}
           />
         </div>
 
         <div className="form-actions">
-          <button type="button" className="btn-cancel" onClick={onCancel}>Cancelar</button>
+          <button type="button" className="btn-cancel" onClick={onCancel}>{t('cancel')}</button>
           <button type="submit" className="btn-save" style={{ background: selectedDept.color }}>
-            {isEdit ? 'Actualizar' : 'Guardar'}
+            {isEdit ? t('update') : t('save')}
           </button>
         </div>
       </form>

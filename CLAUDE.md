@@ -63,8 +63,8 @@ src/
 │   ├── AnnotationTable.jsx        # Tabla legacy (sin uso activo)
 │   ├── ChapterList.jsx            # Página de gestión de capítulos
 │   ├── FileUploader.jsx           # Drop zone para subir PDF
-│   ├── PasswordGate.jsx           # Auth — Google Sign-In con Firebase
-│   └── ProjectList.jsx            # Pantalla de selección de proyectos
+│   ├── PasswordGate.jsx           # Auth — Google Sign-In + whitelist + contexto useAuth
+│   └── ProjectList.jsx            # Pantalla de selección de proyectos + gestión de miembros
 └── utils/
     ├── excelExport.js             # Genera .xlsx con las anotaciones filtradas
     └── pdfAnnotate.js             # Dibuja rectángulos + stickers sobre el PDF
@@ -73,13 +73,23 @@ src/
 **Archivos de configuración en raíz:**
 - `.env.local` — credenciales Firebase (gitignoreado)
 - `.gitignore` — excluye `node_modules/`, `dist/`, `.env*`
-- `firestore.rules` — reglas de seguridad Firestore
+- `firestore.rules` — reglas de seguridad Firestore (con funciones `isAllowed`, `isAdmin`, `isProjectMember`)
 - `storage.rules` — reglas de seguridad Storage
 - `firebase.json` — mapeo de rules para Firebase CLI
 
 ---
 
 ## Modelos de datos (Firestore)
+
+### Colección `/allowedUsers`
+```js
+// Documento ID = email del usuario
+{
+  isAdmin: boolean,    // true = admin, false/undefined = usuario normal
+  createdAt: number,   // timestamp ms
+}
+```
+Se auto-crea al agregar miembros a un proyecto. Admin puede crear vía código; nadie puede editar/borrar desde cliente.
 
 ### Colección `/projects`
 ```js
@@ -108,6 +118,7 @@ src/
 {
   id: string,
   chapterId: string,
+  projectId: string,           // ID del proyecto (para queries y rules)
   pageIndex: number,           // 0-indexed
   highlightAreas: [{           // coordenadas en % (0-100) del tamaño de página
     pageIndex, left, top, width, height
@@ -153,8 +164,8 @@ PHASES = [
 
 ### Estado principal
 - `projects` / `activeProject` — proyectos y proyecto activo
-- `chapters` / `activeChapter` — capítulos y capítulo activo (filtrados por `activeProject.id`)
-- `annotations` / `chapterAnnotations` — todas las anotaciones; filtradas por capítulo
+- `chapters` / `activeChapter` — capítulos del proyecto activo; capítulo activo
+- `annotations` / `chapterAnnotations` — anotaciones del proyecto activo; filtradas por capítulo
 - `filteredAnnotations` — `chapterAnnotations` filtradas por `deptFilter` + `phaseFilter` (usado en PDF viewer Y en exports)
 - `deptFilter`, `phaseFilter` — **`Set<string>`** (vacío = mostrar todos); se pasa como props a `AnnotationSidebar`
 - `selectedAnnotationId` — ID de la anotación actualmente seleccionada (click en PDF → scroll en sidebar)
@@ -164,18 +175,25 @@ PHASES = [
 - `editingAnnotation` — anotación en modo edición
 - `sidebarOpen` — visibilidad del sidebar en móvil
 - `exportingPdf`, `pdfProgress` — estado del export PDF
+- `loadingProjects`, `loadingChapters` — loading compuesto: `loading = loadingProjects || loadingChapters`
 
 ### Refs (para event handlers)
 `drawingRef`, `activeDeptRef`, `popupModeRef`, `drawingPageElRef`, `mobileDrawModeRef`
 
+### Listeners en tiempo real (scoped)
+- **Proyectos**: admin carga todos; usuarios normales filtran con `where('members', 'array-contains', email)`
+- **Capítulos**: `where('projectId', '==', activeProject.id)` — solo se activa al seleccionar proyecto
+- **Anotaciones**: `where('projectId', '==', activeProject.id)` — scoped al proyecto activo
+- Todos usan `onSnapshot()` — sin refresh manual
+
 ### Patrones clave
-- **Listeners en tiempo real**: `onSnapshot()` en `/chapters` y `/annotations` — sin refresh manual
-- **Filtrado en cliente**: todas las anotaciones se cargan en memoria y se filtran en JS
 - **Coordenadas en porcentaje**: `highlightAreas` usa % del tamaño de página → zoom-independent
-- **Eliminación en batch**: al borrar capítulo se usa `writeBatch()` para eliminar capítulo + todas sus anotaciones
+- **Eliminación en batch**: al borrar capítulo/proyecto se usa `writeBatch()` para eliminar en cascada
 - **Estado de filtros elevado**: `deptFilter`/`phaseFilter` viven en `App.jsx` para que el PDF viewer y los exports los usen
 - **Acceso por proyecto**: admin ve todos los proyectos; usuarios normales solo ven proyectos donde su email está en `members[]`
 - **Navegación en 3 pantallas**: ProjectList → ChapterList → PDF Viewer
+- **Auto-migración**: al cargar, el admin migra automáticamente chapters/annotations huérfanos (sin `projectId`)
+- **Auto-creación de allowedUsers**: al agregar un miembro a un proyecto, se crea su doc en `allowedUsers` automáticamente (`setDoc` con `merge: true`)
 
 ---
 
@@ -292,11 +310,13 @@ exportAnnotatedPdf(activeChapter.pdfUrl, filteredAnnotations, activeChapter.titl
 - `.sidebar-item.selected` — resalta la anotación activa con borde naranja
 - `.filter-hint` — texto "Shift+clic: selección múltiple" (oculto en móvil)
 - `.app-header-user` / `.user-avatar` / `.user-name` / `.btn-signout` — sección de usuario en header
+- `.member-panel` / `.member-item` / `.member-add-row` — panel de gestión de miembros en ProjectList
 
 ---
 
-## Autenticación
+## Autenticación y control de acceso
 
+### Google Sign-In
 `PasswordGate.jsx` protege toda la app con **Google Sign-In** (Firebase Auth):
 - `onAuthStateChanged` detecta sesión existente al cargar → no pide login si ya hay sesión
 - Firebase persiste la sesión en IndexedDB automáticamente
@@ -304,9 +324,33 @@ exportAnnotatedPdf(activeChapter.pdfUrl, filteredAnnotations, activeChapter.titl
 - El header muestra foto de perfil, nombre y botón de cerrar sesión (`signOut`)
 - **No hay contraseña compartida**: cada usuario inicia sesión con su propia cuenta Google
 
-### Security Rules
-Tanto Firestore como Storage requieren `request.auth != null`. Se configuran manualmente en Firebase Console (el proyecto usa una cuenta Firebase distinta a la del CLI local):
+### Whitelist (`allowedUsers`)
+- Solo usuarios con documento en `/allowedUsers/{email}` pueden acceder a la app
+- Se auto-crean al agregar miembros a un proyecto (el admin no necesita crearlos manualmente)
+- `isAdmin: true` otorga permisos completos; campo ausente o `false` = usuario normal
+- `useAuth()` hook (de PasswordGate) expone `{ isAdmin }` al resto de la app
 
+### Acceso por proyecto (`members[]`)
+- Cada proyecto tiene un array `members` con emails autorizados
+- **Admin**: ve todos los proyectos, puede crear/editar/eliminar proyectos y gestionar miembros
+- **Usuario normal**: solo ve proyectos donde su email está en `members[]`
+- El filtrado se hace server-side (Firestore rules con `array-contains`) Y client-side (query scoped)
+
+### Security Rules (Firestore)
+```
+isAllowed()        → email en /allowedUsers
+isAdmin()          → isAllowed + isAdmin == true
+isProjectMember()  → email en project.members
+```
+
+| Colección | Lectura | Escritura |
+|-----------|---------|-----------|
+| `allowedUsers` | Solo su propio doc | Admin puede crear; nadie edita/borra |
+| `projects` | Admin: todos · User: solo sus proyectos | Solo admin |
+| `chapters` | Admin o miembro del proyecto | Admin o miembro del proyecto |
+| `annotations` | Admin o miembro del proyecto | Admin o miembro del proyecto |
+
+Se configuran manualmente en Firebase Console (cuenta Firebase distinta al CLI local):
 - **Firestore**: Console → Firestore → Rules
 - **Storage**: Console → Storage → Rules
 - **Google Sign-In**: Console → Authentication → Sign-in method → Google → Activar

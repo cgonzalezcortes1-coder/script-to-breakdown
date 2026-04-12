@@ -20,6 +20,7 @@ import AnnotationForm from './components/AnnotationForm';
 import AnnotationSidebar from './components/AnnotationSidebar';
 import { exportToExcel } from './utils/excelExport';
 import { exportAnnotatedPdf } from './utils/pdfAnnotate';
+import { useI18n } from './i18n';
 import './App.css';
 
 export const DEPARTMENTS = [
@@ -39,6 +40,7 @@ const WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js
 
 export default function App() {
   const { isAdmin } = useAuth();
+  const { t, lang, toggleLang } = useI18n();
 
   // ── Project state ──────────────────────────────────────────
   const [projects, setProjects]           = useState([]);
@@ -262,7 +264,7 @@ export default function App() {
     task.on(
       'state_changed',
       (s) => setUploadProgress(Math.round((s.bytesTransferred / s.totalBytes) * 100)),
-      (err) => { console.error(err); setUploading(false); alert('Error al subir el PDF.'); },
+      (err) => { console.error(err); setUploading(false); alert(t('uploadError')); },
       async () => {
         const pdfUrl = await getDownloadURL(task.snapshot.ref);
         await setDoc(chapterRef, {
@@ -364,7 +366,7 @@ export default function App() {
       );
     } catch (err) {
       console.error('PDF export error:', err);
-      alert('Error al generar el PDF. Intenta de nuevo.');
+      alert(t('pdfExportError'));
     } finally {
       setExportingPdf(false);
       setPdfProgress(0);
@@ -451,7 +453,7 @@ export default function App() {
       <div className="app">
         <div className="loading-screen">
           <div className="loading-spinner" />
-          <p>Cargando…</p>
+          <p>{t('loading')}</p>
         </div>
       </div>
     );
@@ -500,17 +502,18 @@ export default function App() {
       <header className="app-header">
         <div className="app-header-left">
           <h1 className="app-title"><span>HASAN</span> Script Breakdown</h1>
-          <span className="app-sub">Desglose de Sonido · Sound Department</span>
+          <span className="app-sub">{t('appSubtitle')}</span>
         </div>
         <div className="app-header-chapter">
           {activeChapter.title}
         </div>
         <div className="app-header-user">
+          <button className="btn-lang" onClick={toggleLang}>{lang === 'es' ? 'EN' : 'ES'}</button>
           {auth.currentUser?.photoURL && (
             <img src={auth.currentUser.photoURL} alt="" className="user-avatar" referrerPolicy="no-referrer" />
           )}
           <span className="user-name">{auth.currentUser?.displayName?.split(' ')[0]}</span>
-          <button className="btn-signout" onClick={() => signOut(auth)} title="Cerrar sesión">↩</button>
+          <button className="btn-signout" onClick={() => signOut(auth)} title={t('signOut')}>↩</button>
         </div>
       </header>
 
@@ -521,7 +524,7 @@ export default function App() {
             setPopupMode(null);
             setPendingHighlight(null);
           }}>
-            ← Capítulos
+            {t('backToChapters')}
           </button>
 
           {/* Department selector */}
@@ -541,17 +544,17 @@ export default function App() {
           {/* Zoom */}
           <div className="zoom-controls">
             <ZoomOut>
-              {(p) => <button className="zoom-btn" onClick={p.onClick} title="Alejar">−</button>}
+              {(p) => <button className="zoom-btn" onClick={p.onClick} title={t('zoomOut')}>−</button>}
             </ZoomOut>
             <CurrentScale>
               {(p) => <span className="zoom-level">{Math.round(p.scale * 100)}%</span>}
             </CurrentScale>
             <ZoomIn>
-              {(p) => <button className="zoom-btn" onClick={p.onClick} title="Acercar">+</button>}
+              {(p) => <button className="zoom-btn" onClick={p.onClick} title={t('zoomIn')}>+</button>}
             </ZoomIn>
           </div>
 
-          <span className="viewer-hint">Arrastra para marcar</span>
+          <span className="viewer-hint">{t('dragToMark')}</span>
 
           {/* Mobile-only: draw mode toggle */}
           <button
@@ -562,7 +565,7 @@ export default function App() {
               setMobileDrawMode(next);
             }}
           >
-            {mobileDrawMode ? '✏️ Dibujando…' : '✏️ Anotar'}
+            {mobileDrawMode ? t('drawingMode') : t('annotateMode')}
           </button>
         </div>
 
@@ -627,9 +630,9 @@ export default function App() {
       <button
         className={`sidebar-toggle-fab ${sidebarOpen ? 'is-open' : ''}`}
         onClick={() => setSidebarOpen((o) => !o)}
-        aria-label="Anotaciones"
+        aria-label={t('annotations')}
       >
-        {sidebarOpen ? '✕ Cerrar' : `📋 ${chapterAnnotations.length}`}
+        {sidebarOpen ? t('fabClose') : `${t('fab')} ${chapterAnnotations.length}`}
       </button>
 
       {/* New annotation form (after drawing) */}
