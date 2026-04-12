@@ -49,7 +49,9 @@ export default function App() {
   const [activeChapter, setActiveChapter] = useState(null);
   const [uploading, setUploading]         = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [loading, setLoading]             = useState(true);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [loadingChapters, setLoadingChapters] = useState(true);
+  const loading = loadingProjects || loadingChapters;
 
   // ── Annotation state ───────────────────────────────────────
   const [annotations, setAnnotations]     = useState([]);
@@ -99,9 +101,22 @@ export default function App() {
           .map((d) => ({ id: d.id, ...d.data() }))
           .sort((a, b) => a.createdAt - b.createdAt)
       );
+      setLoadingProjects(false);
     });
     return () => unsub();
   }, []);
+
+  // ── Auto-migrate orphaned chapters (no projectId) ──────────
+  useEffect(() => {
+    if (!isAdmin || projects.length === 0 || loadingChapters) return;
+    const orphaned = chapters.filter((c) => !c.projectId);
+    if (orphaned.length === 0) return;
+    const firstProject = projects[0];
+    console.log(`Migrating ${orphaned.length} orphaned chapters to project "${firstProject.title}"`);
+    orphaned.forEach((c) => {
+      updateDoc(doc(db, 'chapters', c.id), { projectId: firstProject.id });
+    });
+  }, [projects, chapters, isAdmin, loadingChapters]);
 
   // Reset activeChapter when project changes
   useEffect(() => {
@@ -116,7 +131,7 @@ export default function App() {
           .map((d) => ({ id: d.id, ...d.data() }))
           .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt)
       );
-      setLoading(false);
+      setLoadingChapters(false);
     });
     return () => unsub();
   }, []);
@@ -255,8 +270,12 @@ export default function App() {
   };
 
   // ── Project CRUD ───────────────────────────────────────────
-  const handleProjectCreate = async (title) => {
-    await addDoc(collection(db, 'projects'), { title, createdAt: Date.now() });
+  const handleProjectCreate = async (title, members = []) => {
+    await addDoc(collection(db, 'projects'), { title, members, createdAt: Date.now() });
+  };
+
+  const handleProjectUpdateMembers = async (projectId, members) => {
+    await updateDoc(doc(db, 'projects', projectId), { members });
   };
 
   const handleProjectDelete = async (project) => {
@@ -408,14 +427,19 @@ export default function App() {
 
   // ── Project list screen ────────────────────────────────────
   if (!activeProject) {
+    const userEmail = auth.currentUser?.email;
+    const visibleProjects = isAdmin
+      ? projects
+      : projects.filter((p) => p.members?.includes(userEmail));
     return (
       <div className="app">
         <ProjectList
-          projects={projects}
+          projects={visibleProjects}
           chapters={chapters}
           onCreate={handleProjectCreate}
           onSelect={setActiveProject}
           onDelete={handleProjectDelete}
+          onUpdateMembers={handleProjectUpdateMembers}
           isAdmin={isAdmin}
         />
       </div>

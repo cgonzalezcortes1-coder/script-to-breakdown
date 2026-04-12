@@ -8,6 +8,12 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email));
     }
 
+    // Verifica que el usuario sea admin
+    function isAdmin() {
+      return isAllowed() &&
+        get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email)).data.isAdmin == true;
+    }
+
     // allowedUsers: cada usuario solo puede leer su propio documento
     // Escritura bloqueada desde el cliente — solo desde Firebase Console
     match /allowedUsers/{email} {
@@ -15,11 +21,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Proyectos, capítulos y anotaciones: solo usuarios en la whitelist
-    match /projects/{doc} {
-      allow read, write: if isAllowed();
+    // Proyectos: admin puede todo; miembros solo pueden leer sus proyectos
+    match /projects/{projectId} {
+      allow read: if isAllowed() &&
+        (isAdmin() || request.auth.token.email in resource.data.members);
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
     }
 
+    // Capítulos y anotaciones: solo usuarios en la whitelist
     match /chapters/{doc} {
       allow read, write: if isAllowed();
     }

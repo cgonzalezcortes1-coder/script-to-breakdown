@@ -63,7 +63,8 @@ src/
 │   ├── AnnotationTable.jsx        # Tabla legacy (sin uso activo)
 │   ├── ChapterList.jsx            # Página de gestión de capítulos
 │   ├── FileUploader.jsx           # Drop zone para subir PDF
-│   └── PasswordGate.jsx           # Auth — Google Sign-In con Firebase
+│   ├── PasswordGate.jsx           # Auth — Google Sign-In con Firebase
+│   └── ProjectList.jsx            # Pantalla de selección de proyectos
 └── utils/
     ├── excelExport.js             # Genera .xlsx con las anotaciones filtradas
     └── pdfAnnotate.js             # Dibuja rectángulos + stickers sobre el PDF
@@ -80,12 +81,23 @@ src/
 
 ## Modelos de datos (Firestore)
 
+### Colección `/projects`
+```js
+{
+  id: string,          // auto-generado por Firestore
+  title: string,
+  members: [string],   // array de emails con acceso al proyecto
+  createdAt: number,   // timestamp ms
+}
+```
+
 ### Colección `/chapters`
 ```js
 {
   id: string,          // auto-generado por Firestore
   title: string,
   pdfUrl: string,      // URL de Firebase Storage
+  projectId: string,   // ID del proyecto al que pertenece
   order: number,       // orden de visualización
   createdAt: number,   // timestamp ms
 }
@@ -140,7 +152,8 @@ PHASES = [
 ## Arquitectura de App.jsx
 
 ### Estado principal
-- `chapters` / `activeChapter` — capítulos y capítulo activo
+- `projects` / `activeProject` — proyectos y proyecto activo
+- `chapters` / `activeChapter` — capítulos y capítulo activo (filtrados por `activeProject.id`)
 - `annotations` / `chapterAnnotations` — todas las anotaciones; filtradas por capítulo
 - `filteredAnnotations` — `chapterAnnotations` filtradas por `deptFilter` + `phaseFilter` (usado en PDF viewer Y en exports)
 - `deptFilter`, `phaseFilter` — **`Set<string>`** (vacío = mostrar todos); se pasa como props a `AnnotationSidebar`
@@ -161,6 +174,8 @@ PHASES = [
 - **Coordenadas en porcentaje**: `highlightAreas` usa % del tamaño de página → zoom-independent
 - **Eliminación en batch**: al borrar capítulo se usa `writeBatch()` para eliminar capítulo + todas sus anotaciones
 - **Estado de filtros elevado**: `deptFilter`/`phaseFilter` viven en `App.jsx` para que el PDF viewer y los exports los usen
+- **Acceso por proyecto**: admin ve todos los proyectos; usuarios normales solo ven proyectos donde su email está en `members[]`
+- **Navegación en 3 pantallas**: ProjectList → ChapterList → PDF Viewer
 
 ---
 

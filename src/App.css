@@ -1039,6 +1039,121 @@ body {
   padding: 3px 7px;
 }
 
+/* Member management button */
+.chapter-members-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: background 0.15s;
+  line-height: 1;
+}
+.chapter-members-btn:hover { background: var(--orange-pale); }
+
+/* Card inner wrapper (for member panel layout) */
+.chapter-card-inner { cursor: pointer; }
+.chapter-card.managing {
+  cursor: default;
+}
+.chapter-card.managing .chapter-card-inner {
+  cursor: default;
+}
+
+/* Member panel */
+.member-panel {
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.member-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.member-panel-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.member-panel-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--g500);
+  font-size: 0.85rem;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.member-panel-close:hover { background: var(--g200); }
+
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.member-empty {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.member-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface2);
+  border-radius: var(--radius-s);
+  padding: 4px 8px;
+}
+.member-email {
+  font-size: 0.78rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.member-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--g300);
+  font-size: 0.9rem;
+  padding: 0 4px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.member-remove:hover { color: #C0392B; }
+
+.member-add-row {
+  display: flex;
+  gap: 6px;
+}
+.member-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem !important;
+  padding: 5px 8px !important;
+}
+.member-add-btn {
+  padding: 5px 12px !important;
+  font-size: 0.75rem !important;
+  flex-shrink: 0;
+}
+
+.form-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
 /* Add chapter card */
 .chapter-add-card {
   border: 2px dashed var(--g200);
