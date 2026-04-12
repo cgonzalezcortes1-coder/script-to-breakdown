@@ -6,7 +6,7 @@ import { useI18n } from '../i18n';
 export default function ProjectList({
   projects, chapters, onCreate, onSelect, onDelete, onUpdateMembers, isAdmin,
 }) {
-  const { t } = useI18n();
+  const { t, lang, toggleLang } = useI18n();
   const [showForm, setShowForm]       = useState(false);
   const [title, setTitle]             = useState('');
   const [formMembers, setFormMembers] = useState('');
@@ -78,6 +78,7 @@ export default function ProjectList({
           <span className="app-sub">{t('appSubtitle')}</span>
         </div>
         <div className="app-header-user">
+          <button className="btn-lang" onClick={toggleLang}>{lang === 'es' ? 'EN' : 'ES'}</button>
           {auth.currentUser?.photoURL && (
             <img src={auth.currentUser.photoURL} alt="" className="user-avatar" referrerPolicy="no-referrer" />
           )}

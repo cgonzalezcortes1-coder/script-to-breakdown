@@ -86,6 +86,15 @@ const strings = {
     fab: '📋',
     fabClose: '✕ Cerrar',
 
+    // Departments & Phases
+    dept_dialogos: 'Diálogos',
+    dept_ambientes: 'Ambientes',
+    dept_efectos: 'Efectos',
+    dept_foley: 'Foley',
+    phase_pre: 'Pre',
+    phase_prod: 'Prod',
+    phase_post: 'Post',
+
     // AnnotationForm
     newAnnotation: 'Nueva Anotación',
     editAnnotation: 'Editar Anotación',
@@ -191,6 +200,15 @@ const strings = {
     closeSidebar: 'Close',
     fab: '📋',
     fabClose: '✕ Close',
+
+    // Departments & Phases
+    dept_dialogos: 'Dialogue',
+    dept_ambientes: 'Ambience',
+    dept_efectos: 'Effects',
+    dept_foley: 'Foley',
+    phase_pre: 'Pre',
+    phase_prod: 'Prod',
+    phase_post: 'Post',
 
     // AnnotationForm
     newAnnotation: 'New Annotation',

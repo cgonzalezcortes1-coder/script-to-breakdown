@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Worker, Viewer } from '@react-pdf-viewer/core';
 import { highlightPlugin } from '@react-pdf-viewer/highlight';
 import { zoomPlugin } from '@react-pdf-viewer/zoom';
@@ -23,17 +23,17 @@ import { exportAnnotatedPdf } from './utils/pdfAnnotate';
 import { useI18n } from './i18n';
 import './App.css';
 
-export const DEPARTMENTS = [
-  { id: 'dialogos',  label: 'Diálogos',  color: '#16a34a' },
-  { id: 'ambientes', label: 'Ambientes', color: '#ea580c' },
-  { id: 'efectos',   label: 'Efectos',   color: '#db2777' },
-  { id: 'foley',     label: 'Foley',     color: '#7c3aed' },
+const DEPT_DEFS = [
+  { id: 'dialogos',  color: '#16a34a' },
+  { id: 'ambientes', color: '#ea580c' },
+  { id: 'efectos',   color: '#db2777' },
+  { id: 'foley',     color: '#7c3aed' },
 ];
 
-export const PHASES = [
-  { id: 'pre',  label: 'Pre',  color: '#3b82f6' },
-  { id: 'prod', label: 'Prod', color: '#f59e0b' },
-  { id: 'post', label: 'Post', color: '#14b8a6' },
+const PHASE_DEFS = [
+  { id: 'pre',  color: '#3b82f6' },
+  { id: 'prod', color: '#f59e0b' },
+  { id: 'post', color: '#14b8a6' },
 ];
 
 const WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
@@ -41,6 +41,11 @@ const WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js
 export default function App() {
   const { isAdmin } = useAuth();
   const { t, lang, toggleLang } = useI18n();
+
+  const DEPARTMENTS = useMemo(() =>
+    DEPT_DEFS.map((d) => ({ ...d, label: t(`dept_${d.id}`) })), [lang]);
+  const PHASES = useMemo(() =>
+    PHASE_DEFS.map((p) => ({ ...p, label: t(`phase_${p.id}`) })), [lang]);
 
   // ── Project state ──────────────────────────────────────────
   const [projects, setProjects]           = useState([]);

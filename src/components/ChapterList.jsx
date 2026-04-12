@@ -7,7 +7,7 @@ export default function ChapterList({
   chapters, annotations, uploading, uploadProgress, onCreate, onSelect, onDelete, isAdmin,
   projectTitle, onBack,
 }) {
-  const { t } = useI18n();
+  const { t, lang, toggleLang } = useI18n();
   const [showForm, setShowForm]   = useState(false);
   const [title, setTitle]         = useState('');
   const [file, setFile]           = useState(null);
@@ -67,6 +67,7 @@ export default function ChapterList({
           {projectTitle && <span className="app-sub">{projectTitle}</span>}
         </div>
         <div className="app-header-user">
+          <button className="btn-lang" onClick={toggleLang}>{lang === 'es' ? 'EN' : 'ES'}</button>
           {auth.currentUser?.photoURL && (
             <img src={auth.currentUser.photoURL} alt="" className="user-avatar" referrerPolicy="no-referrer" />
           )}
