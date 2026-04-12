@@ -146,6 +146,19 @@ export default function App() {
     setActiveChapter(null);
   }, [activeProject?.id]);
 
+  // ── Load all chapters for dashboard counts ─────────────────
+  const [allChapters, setAllChapters] = useState([]);
+  useEffect(() => {
+    if (projects.length === 0) { setAllChapters([]); return; }
+    const projectIds = projects.map((p) => p.id);
+    // Firestore 'in' supports up to 30 values — enough for this use case
+    const q = query(collection(db, 'chapters'), where('projectId', 'in', projectIds.slice(0, 30)));
+    const unsub = onSnapshot(q, (snap) => {
+      setAllChapters(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, [projects]);
+
   // ── Load chapters (scoped to active project) ──────────────
   useEffect(() => {
     if (!activeProject) {
@@ -470,7 +483,7 @@ export default function App() {
       <div className="app">
         <ProjectList
           projects={projects}
-          chapters={chapters}
+          chapters={allChapters}
           onCreate={handleProjectCreate}
           onSelect={setActiveProject}
           onDelete={handleProjectDelete}
