@@ -93,9 +93,13 @@ export default function App() {
   activeDeptRef.current = activeDept;
   popupModeRef.current  = popupMode;
 
-  // ── Load projects ──────────────────────────────────────────
+  // ── Load projects (admin: all | user: only where member) ───
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'projects'), (snap) => {
+    const userEmail = auth.currentUser?.email;
+    const q = isAdmin
+      ? collection(db, 'projects')
+      : query(collection(db, 'projects'), where('members', 'array-contains', userEmail));
+    const unsub = onSnapshot(q, (snap) => {
       setProjects(
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
@@ -104,28 +108,46 @@ export default function App() {
       setLoadingProjects(false);
     });
     return () => unsub();
-  }, []);
+  }, [isAdmin]);
 
-  // ── Auto-migrate orphaned chapters (no projectId) ──────────
+  // ── Auto-migrate orphaned annotations (no projectId) ───────
   useEffect(() => {
-    if (!isAdmin || projects.length === 0 || loadingChapters) return;
-    const orphaned = chapters.filter((c) => !c.projectId);
-    if (orphaned.length === 0) return;
-    const firstProject = projects[0];
-    console.log(`Migrating ${orphaned.length} orphaned chapters to project "${firstProject.title}"`);
-    orphaned.forEach((c) => {
-      updateDoc(doc(db, 'chapters', c.id), { projectId: firstProject.id });
-    });
-  }, [projects, chapters, isAdmin, loadingChapters]);
+    if (!isAdmin) return;
+    const migrateOrphans = async () => {
+      const annSnap = await getDocs(collection(db, 'annotations'));
+      const orphaned = annSnap.docs.filter((d) => !d.data().projectId);
+      if (orphaned.length === 0) return;
+
+      // Build chapterId → projectId map
+      const chapSnap = await getDocs(collection(db, 'chapters'));
+      const chapMap = {};
+      chapSnap.docs.forEach((d) => { chapMap[d.id] = d.data().projectId; });
+
+      console.log(`Migrating ${orphaned.length} orphaned annotations…`);
+      const batch = writeBatch(db);
+      orphaned.forEach((d) => {
+        const projectId = chapMap[d.data().chapterId];
+        if (projectId) batch.update(d.ref, { projectId });
+      });
+      await batch.commit();
+    };
+    migrateOrphans();
+  }, [isAdmin]);
 
   // Reset activeChapter when project changes
   useEffect(() => {
     setActiveChapter(null);
   }, [activeProject?.id]);
 
-  // ── Load chapters ──────────────────────────────────────────
+  // ── Load chapters (scoped to active project) ──────────────
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'chapters'), (snap) => {
+    if (!activeProject) {
+      setChapters([]);
+      setLoadingChapters(false);
+      return;
+    }
+    const q = query(collection(db, 'chapters'), where('projectId', '==', activeProject.id));
+    const unsub = onSnapshot(q, (snap) => {
       setChapters(
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
@@ -134,11 +156,13 @@ export default function App() {
       setLoadingChapters(false);
     });
     return () => unsub();
-  }, []);
+  }, [activeProject?.id]);
 
-  // ── Load annotations (all, filtered client-side per chapter) ─
+  // ── Load annotations (scoped to active project) ───────────
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'annotations'), (snap) => {
+    if (!activeProject) { setAnnotations([]); return; }
+    const q = query(collection(db, 'annotations'), where('projectId', '==', activeProject.id));
+    const unsub = onSnapshot(q, (snap) => {
       setAnnotations(
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
@@ -146,7 +170,7 @@ export default function App() {
       );
     });
     return () => unsub();
-  }, []);
+  }, [activeProject?.id]);
 
   // ── Annotations for active chapter ─────────────────────────
   const chapterAnnotations = activeChapter
@@ -272,10 +296,18 @@ export default function App() {
   // ── Project CRUD ───────────────────────────────────────────
   const handleProjectCreate = async (title, members = []) => {
     await addDoc(collection(db, 'projects'), { title, members, createdAt: Date.now() });
+    // Auto-create allowedUsers for each member
+    for (const email of members) {
+      await setDoc(doc(db, 'allowedUsers', email), { createdAt: Date.now() }, { merge: true });
+    }
   };
 
   const handleProjectUpdateMembers = async (projectId, members) => {
     await updateDoc(doc(db, 'projects', projectId), { members });
+    // Auto-create allowedUsers doc for new members (merge to not overwrite existing isAdmin)
+    for (const email of members) {
+      await setDoc(doc(db, 'allowedUsers', email), { createdAt: Date.now() }, { merge: true });
+    }
   };
 
   const handleProjectDelete = async (project) => {
@@ -303,7 +335,7 @@ export default function App() {
 
   // ── Annotation CRUD ────────────────────────────────────────
   const addAnnotation = (a) =>
-    addDoc(collection(db, 'annotations'), { ...a, chapterId: activeChapter.id, createdAt: Date.now() });
+    addDoc(collection(db, 'annotations'), { ...a, chapterId: activeChapter.id, projectId: activeProject.id, createdAt: Date.now() });
 
   const deleteAnnotation = (id) => deleteDoc(doc(db, 'annotations', id));
 
@@ -427,14 +459,10 @@ export default function App() {
 
   // ── Project list screen ────────────────────────────────────
   if (!activeProject) {
-    const userEmail = auth.currentUser?.email;
-    const visibleProjects = isAdmin
-      ? projects
-      : projects.filter((p) => p.members?.includes(userEmail));
     return (
       <div className="app">
         <ProjectList
-          projects={visibleProjects}
+          projects={projects}
           chapters={chapters}
           onCreate={handleProjectCreate}
           onSelect={setActiveProject}
@@ -448,11 +476,10 @@ export default function App() {
 
   // ── Chapter list screen ────────────────────────────────────
   if (!activeChapter) {
-    const projectChapters = chapters.filter((c) => c.projectId === activeProject.id);
     return (
       <div className="app">
         <ChapterList
-          chapters={projectChapters}
+          chapters={chapters}
           annotations={annotations}
           uploading={uploading}
           uploadProgress={uploadProgress}

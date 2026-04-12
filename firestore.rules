@@ -14,28 +14,36 @@ service cloud.firestore {
         get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email)).data.isAdmin == true;
     }
 
-    // allowedUsers: cada usuario solo puede leer su propio documento
-    // Escritura bloqueada desde el cliente — solo desde Firebase Console
-    match /allowedUsers/{email} {
-      allow read:  if request.auth != null && request.auth.token.email == email;
-      allow write: if false;
+    // Verifica que el usuario sea miembro del proyecto
+    function isProjectMember(projectId) {
+      return request.auth.token.email in
+        get(/databases/$(database)/documents/projects/$(projectId)).data.members;
     }
 
-    // Proyectos: admin puede todo; miembros solo pueden leer sus proyectos
+    // allowedUsers: cada usuario puede leer su propio doc; admin puede crear nuevos
+    match /allowedUsers/{email} {
+      allow read:   if request.auth != null && request.auth.token.email == email;
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // Proyectos: admin puede todo; miembros solo lectura
     match /projects/{projectId} {
       allow read: if isAllowed() &&
         (isAdmin() || request.auth.token.email in resource.data.members);
-      allow create: if isAdmin();
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
-    // Capítulos y anotaciones: solo usuarios en la whitelist
-    match /chapters/{doc} {
-      allow read, write: if isAllowed();
+    // Capítulos: admin o miembro del proyecto al que pertenece
+    match /chapters/{chapterId} {
+      allow read, write: if isAllowed() &&
+        (isAdmin() || isProjectMember(resource.data.projectId));
     }
 
-    match /annotations/{doc} {
-      allow read, write: if isAllowed();
+    // Anotaciones: admin o miembro del proyecto al que pertenece
+    match /annotations/{annId} {
+      allow read, write: if isAllowed() &&
+        (isAdmin() || isProjectMember(resource.data.projectId));
     }
   }
 }
