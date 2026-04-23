@@ -122,7 +122,7 @@ const styles = {
   },
   card: {
     background: '#FFFFFF', border: '1px solid #E4E4E4',
-    borderTop: '3px solid #F5A623', borderRadius: '12px',
+    borderTop: '3px solid #ff7a20', borderRadius: '12px',
     padding: '40px 44px 32px', width: '100%', maxWidth: '380px',
     boxShadow: '0 4px 32px rgba(0,0,0,0.10)',
     display: 'flex', flexDirection: 'column',
@@ -132,7 +132,7 @@ const styles = {
     fontFamily: "'DM Serif Display', serif", fontSize: '1.5rem',
     fontWeight: 400, color: '#1C1C1C', letterSpacing: '-0.02em',
   },
-  brandOrange: { color: '#F5A623' },
+  brandOrange: { color: '#ff7a20' },
   brandSub: {
     fontSize: '0.62rem', fontWeight: 600, color: '#8A8A8A',
     textTransform: 'uppercase', letterSpacing: '0.18em',

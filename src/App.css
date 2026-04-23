@@ -9,10 +9,10 @@
 
 :root {
   /* HASAN palette */
-  --orange:        #F5A623;
-  --orange-d:      #D9880A;
-  --orange-pale:   #FEF5E7;
-  --orange-border: #FADEA0;
+  --orange:        #ff7a20;
+  --orange-d:      #b4580e;
+  --orange-pale:   #fef0e7;
+  --orange-border: #ff8403;
 
   --g900: #1C1C1C;
   --g700: #484848;
