@@ -323,10 +323,14 @@ export default function App() {
   };
 
   const handleProjectUpdateMembers = async (projectId, members) => {
+    // Determine which members are truly new (not in the current project)
+    const current = projects.find((p) => p.id === projectId)?.members || [];
+    const newMembers = members.filter((email) => !current.includes(email));
+
     await updateDoc(doc(db, 'projects', projectId), { members });
-    // Auto-create allowedUsers doc for new members (merge to not overwrite existing isAdmin)
-    for (const email of members) {
-      await setDoc(doc(db, 'allowedUsers', email), { createdAt: Date.now() }, { merge: true });
+    // Only create allowedUsers for NEW members (updating existing docs is blocked by rules)
+    for (const email of newMembers) {
+      await setDoc(doc(db, 'allowedUsers', email), { createdAt: Date.now() });
     }
   };
 
